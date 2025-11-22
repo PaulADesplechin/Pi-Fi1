@@ -15,6 +15,7 @@ from telegram.ext import (
 from telegram.constants import ParseMode
 import httpx
 from httpx import TimeoutException
+import requests as sync_requests
 from dotenv import load_dotenv
 
 # Charger les variables d'environnement
@@ -143,9 +144,35 @@ class CryptoAPI:
             print(f"❌ Erreur HTTP API CoinGecko pour {coin_id}: {e.response.status_code} - {e.response.text}")
             return None
         except Exception as e:
-            print(f"❌ Erreur API CoinGecko pour {coin_id}: {type(e).__name__} - {str(e)}")
-            import traceback
-            traceback.print_exc()
+            print(f"❌ Erreur API CoinGecko (httpx) pour {coin_id}: {type(e).__name__} - {str(e)}")
+            # Fallback avec requests synchrone
+            try:
+                print(f"🔄 Tentative avec requests (fallback)...")
+                url = f"{COINGECKO_API_URL}/simple/price"
+                params = {
+                    'ids': coin_id,
+                    'vs_currencies': 'usd',
+                    'include_24hr_change': 'true',
+                    'include_market_cap': 'true',
+                    'include_24hr_vol': 'true'
+                }
+                response = sync_requests.get(url, params=params, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+                
+                if coin_id in data:
+                    token_data = data[coin_id]
+                    price = token_data['usd']
+                    change_24h = token_data.get('usd_24h_change', 0)
+                    market_cap = token_data.get('usd_market_cap', 0)
+                    volume_24h = token_data.get('usd_24h_vol', 0)
+                    
+                    result = (price, change_24h, market_cap, volume_24h)
+                    price_cache[coin_id] = (result, datetime.now())
+                    print(f"✅ Prix récupéré (fallback) pour {coin_id}: ${price}")
+                    return result
+            except Exception as e2:
+                print(f"❌ Erreur fallback requests: {e2}")
             return None
     
     async def get_multiple_prices(self, token_ids: List[str]) -> Dict[str, tuple]:
