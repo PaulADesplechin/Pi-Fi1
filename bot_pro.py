@@ -123,10 +123,11 @@ class CryptoAPI:
                 return cached_result
         
         # Essayer d'abord Binance (plus fiable, pas de rate limit strict)
-        if coin_id.lower() in BINANCE_SYMBOLS or token_id.lower() in BINANCE_SYMBOLS:
-            symbol = BINANCE_SYMBOLS.get(coin_id.lower()) or BINANCE_SYMBOLS.get(token_id.lower())
+        symbol_key = coin_id.lower() if coin_id.lower() in BINANCE_SYMBOLS else token_id.lower()
+        if symbol_key in BINANCE_SYMBOLS:
+            symbol = BINANCE_SYMBOLS[symbol_key]
             try:
-                print(f"🔍 Requête Binance pour: {symbol}")
+                print(f"🔍 [BINANCE] Requête pour: {symbol} (coin_id: {coin_id}, token_id: {token_id})")
                 url = f"{BINANCE_API_URL}/ticker/24hr"
                 params = {'symbol': symbol}
                 
@@ -135,6 +136,8 @@ class CryptoAPI:
                     None,
                     lambda: sync_requests.get(url, params=params, timeout=10)
                 )
+                
+                print(f"📡 [BINANCE] Status code: {response.status_code}")
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -147,10 +150,14 @@ class CryptoAPI:
                     
                     result = (price, change_24h, market_cap, volume_24h)
                     price_cache[coin_id] = (result, datetime.now())
-                    print(f"✅ Prix récupéré (Binance) pour {coin_id}: ${price}")
+                    print(f"✅ [BINANCE] Prix récupéré pour {coin_id}: ${price}")
                     return result
+                else:
+                    print(f"⚠️ [BINANCE] Erreur status {response.status_code}: {response.text[:100]}")
             except Exception as e:
-                print(f"⚠️ Erreur Binance pour {coin_id}: {e}")
+                print(f"⚠️ [BINANCE] Exception pour {coin_id}: {type(e).__name__} - {str(e)}")
+                import traceback
+                traceback.print_exc()
         
         # Fallback sur CoinGecko si Binance échoue
         try:
@@ -171,7 +178,7 @@ class CryptoAPI:
                 'include_24hr_vol': 'true'
             }
             
-            print(f"🔍 Requête CoinGecko pour: {coin_id}")
+            print(f"🔍 [COINGECKO] Requête pour: {coin_id} (fallback après Binance)")
             last_api_call = datetime.now()
             
             loop = asyncio.get_event_loop()
