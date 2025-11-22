@@ -13,8 +13,6 @@ from telegram.ext import (
     ContextTypes, MessageHandler, filters
 )
 from telegram.constants import ParseMode
-import httpx
-from httpx import TimeoutException
 import requests as sync_requests
 from dotenv import load_dotenv
 
