@@ -14,6 +14,7 @@ from telegram.ext import (
 )
 from telegram.constants import ParseMode
 import httpx
+from httpx import TimeoutException
 from dotenv import load_dotenv
 
 # Charger les variables d'environnement
@@ -78,38 +79,62 @@ class CryptoAPI:
         """Récupère le prix d'un token depuis CoinGecko (avec cache)"""
         token_id = token_id.lower()
         
+        # Mapping des noms communs vers les IDs CoinGecko
+        token_mapping = {
+            'btc': 'bitcoin',
+            'eth': 'ethereum',
+            'bnb': 'binancecoin',
+            'sol': 'solana',
+            'ada': 'cardano',
+            'dot': 'polkadot',
+            'matic': 'matic-network',
+            'avax': 'avalanche-2',
+            'link': 'chainlink',
+            'xrp': 'ripple'
+        }
+        
+        # Utiliser le mapping si disponible
+        coin_id = token_mapping.get(token_id, token_id)
+        
         # Vérifier le cache
-        if token_id in price_cache:
-            price, timestamp = price_cache[token_id]
-            if (datetime.now() - timestamp).seconds < CACHE_DURATION:
-                return price
+        if coin_id in price_cache:
+            cached_result, timestamp = price_cache[coin_id]
+            if isinstance(cached_result, tuple) and (datetime.now() - timestamp).seconds < CACHE_DURATION:
+                return cached_result
         
         try:
             url = f"{COINGECKO_API_URL}/simple/price"
             params = {
-                'ids': token_id,
+                'ids': coin_id,
                 'vs_currencies': 'usd',
                 'include_24hr_change': 'true',
                 'include_market_cap': 'true',
                 'include_24hr_vol': 'true'
             }
-            response = await self.client.get(url, params=params)
+            response = await self.client.get(url, params=params, timeout=15.0)
             response.raise_for_status()
             data = response.json()
             
-            if token_id in data:
-                token_data = data[token_id]
+            if coin_id in data:
+                token_data = data[coin_id]
                 price = token_data['usd']
                 change_24h = token_data.get('usd_24h_change', 0)
                 market_cap = token_data.get('usd_market_cap', 0)
                 volume_24h = token_data.get('usd_24h_vol', 0)
                 
                 result = (price, change_24h, market_cap, volume_24h)
-                price_cache[token_id] = (result, datetime.now())
+                price_cache[coin_id] = (result, datetime.now())
                 return result
+            
+            # Si pas trouvé, essayer de chercher avec search
+            if not data:
+                print(f"Token {coin_id} non trouvé dans CoinGecko")
+            return None
+        except TimeoutException:
+            print(f"Timeout API CoinGecko pour {coin_id}")
             return None
         except Exception as e:
-            print(f"Erreur API CoinGecko pour {token_id}: {e}")
+            print(f"Erreur API CoinGecko pour {coin_id}: {e}")
             return None
     
     async def get_multiple_prices(self, token_ids: List[str]) -> Dict[str, tuple]:
@@ -667,7 +692,12 @@ async def price_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = await crypto_api.get_price(token_id)
     
     if not result:
-        await update.message.reply_text(f"❌ Token '{token_id}' introuvable")
+        await update.message.reply_text(
+            f"❌ Token '{token_id}' introuvable.\n\n"
+            "💡 Essayez avec l'ID CoinGecko exact ou utilisez:\n"
+            "• `/price btc` ou `/price eth`\n"
+            "• Utilisez le menu 💰 Prix Crypto pour voir les options disponibles"
+        )
         return
     
     price, change_24h, market_cap, volume_24h = result
