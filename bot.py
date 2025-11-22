@@ -356,8 +356,11 @@ def main():
     """Fonction principale pour démarrer le bot"""
     if not TELEGRAM_BOT_TOKEN:
         print("❌ ERREUR: TELEGRAM_BOT_TOKEN n'est pas défini!")
-        print("Créez un fichier .env avec votre token Telegram Bot.")
-        return
+        print("Pour le développement local: Créez un fichier .env avec votre token Telegram Bot.")
+        print("Pour Render.com: Ajoutez TELEGRAM_BOT_TOKEN dans Environment Variables.")
+        print("Valeur attendue: 8472604934:AAFcRXynmy2MKxRx4KbIAYGGtutijku5_H0")
+        import sys
+        sys.exit(1)
     
     # Créer l'application
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
@@ -374,7 +377,10 @@ def main():
     
     # Ajouter le job de surveillance (vérifie toutes les 60 secondes)
     job_queue = application.job_queue
-    job_queue.run_repeating(monitor_prices, interval=60, first=10)
+    if job_queue:
+        job_queue.run_repeating(monitor_prices, interval=60, first=10)
+    else:
+        print("⚠️ JobQueue non disponible. Les alertes automatiques ne fonctionneront pas.")
     
     # Démarrer le bot
     print("🤖 Bot démarré! Appuyez sur Ctrl+C pour arrêter.")
