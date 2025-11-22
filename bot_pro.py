@@ -211,7 +211,11 @@ class CryptoAPI:
                 'sort': 'desc',
                 'apikey': ETHERSCAN_API_KEY
             }
-            response = await self.client.get(url, params=params)
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: sync_requests.get(url, params=params, timeout=10)
+            )
             response.raise_for_status()
             data = response.json()
             
@@ -226,7 +230,11 @@ class CryptoAPI:
         """Récupère les nouveaux tokens depuis DexScreener (sniper)"""
         try:
             url = f"{DEXSCREENER_API_URL}/tokens/{chain}"
-            response = await self.client.get(url)
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: sync_requests.get(url, timeout=10)
+            )
             response.raise_for_status()
             data = response.json()
             
@@ -264,7 +272,11 @@ class CryptoAPI:
         try:
             # Vérifier la liquidité
             url = f"{DEXSCREENER_API_URL}/tokens/{token_address}"
-            response = await self.client.get(url)
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: sync_requests.get(url, timeout=10)
+            )
             response.raise_for_status()
             data = response.json()
             
@@ -304,8 +316,8 @@ class CryptoAPI:
         return indicators
     
     async def close(self):
-        """Ferme le client HTTP"""
-        await self.client.aclose()
+        """Ferme le client HTTP (plus nécessaire avec requests)"""
+        pass
 
 # Instance globale de l'API
 crypto_api = CryptoAPI()
