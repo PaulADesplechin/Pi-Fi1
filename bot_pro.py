@@ -96,8 +96,11 @@ class CryptoAPI:
         pass
     
     async def get_price(self, token_id: str) -> Optional[tuple]:
-        """Récupère le prix d'un token depuis CoinGecko (avec cache)"""
+        """Récupère le prix d'un token"""
+        original_token_id = token_id
         token_id = token_id.lower()
+        
+        print(f"🔍 get_price appelé avec: '{original_token_id}' (normalisé: '{token_id}')")
         
         # Mapping des noms communs vers les IDs CoinGecko
         token_mapping = {
@@ -115,20 +118,25 @@ class CryptoAPI:
         
         # Utiliser le mapping si disponible
         coin_id = token_mapping.get(token_id, token_id)
+        print(f"📝 coin_id après mapping: '{coin_id}'")
         
         # Vérifier le cache
         if coin_id in price_cache:
             cached_result, timestamp = price_cache[coin_id]
             if isinstance(cached_result, tuple) and (datetime.now() - timestamp).seconds < CACHE_DURATION:
+                print(f"💾 Cache hit pour {coin_id}")
                 return cached_result
         
         # Essayer d'abord Binance (plus fiable, pas de rate limit strict)
-        # Vérifier dans l'ordre: coin_id puis token_id
         symbol = None
-        if coin_id.lower() in BINANCE_SYMBOLS:
-            symbol = BINANCE_SYMBOLS[coin_id.lower()]
-        elif token_id.lower() in BINANCE_SYMBOLS:
-            symbol = BINANCE_SYMBOLS[token_id.lower()]
+        if coin_id in BINANCE_SYMBOLS:
+            symbol = BINANCE_SYMBOLS[coin_id]
+            print(f"✅ Binance disponible pour {coin_id} → {symbol}")
+        elif token_id in BINANCE_SYMBOLS:
+            symbol = BINANCE_SYMBOLS[token_id]
+            print(f"✅ Binance disponible pour {token_id} → {symbol}")
+        else:
+            print(f"⚠️ {coin_id} et {token_id} pas dans BINANCE_SYMBOLS")
         
         if symbol:
             try:
