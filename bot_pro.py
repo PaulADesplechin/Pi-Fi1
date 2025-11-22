@@ -6,6 +6,7 @@ import os
 import asyncio
 import re
 from datetime import datetime, timedelta
+import time
 from typing import Dict, List, Optional, Set
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -37,7 +38,9 @@ alert_subscribers: Dict[str, Set[int]] = {  # {token: {user_ids}}
 
 # Cache pour éviter trop d'appels API
 price_cache: Dict[str, tuple] = {}  # {token_id: (price, timestamp)}
-CACHE_DURATION = 30  # secondes
+CACHE_DURATION = 60  # secondes (augmenté pour réduire les requêtes)
+last_api_call = None
+MIN_API_INTERVAL = 1.5  # secondes minimum entre les appels API (rate limiting CoinGecko)
 
 class SecurityValidator:
     """Classe pour valider et sécuriser les entrées utilisateur"""
@@ -104,6 +107,15 @@ class CryptoAPI:
         
         # Utiliser requests directement (plus simple et fiable)
         try:
+            # Rate limiting : attendre entre les requêtes
+            global last_api_call
+            if last_api_call:
+                time_since_last = (datetime.now() - last_api_call).total_seconds()
+                if time_since_last < MIN_API_INTERVAL:
+                    wait_time = MIN_API_INTERVAL - time_since_last
+                    print(f"⏳ Rate limiting: attente {wait_time:.1f}s...")
+                    await asyncio.sleep(wait_time)
+            
             url = f"{COINGECKO_API_URL}/simple/price"
             params = {
                 'ids': coin_id,
@@ -113,9 +125,8 @@ class CryptoAPI:
                 'include_24hr_vol': 'true'
             }
             
-            print(f"🔍 Requête API CoinGecko pour: {coin_id} (token_id original: {token_id})")
-            print(f"🔗 URL: {url}")
-            print(f"📋 Params: {params}")
+            print(f"🔍 Requête API CoinGecko pour: {coin_id}")
+            last_api_call = datetime.now()
             
             # Utiliser requests dans un thread pour ne pas bloquer
             loop = asyncio.get_event_loop()
@@ -125,12 +136,20 @@ class CryptoAPI:
             )
             
             print(f"📡 Status code: {response.status_code}")
-            print(f"📄 Response text (preview): {response.text[:200]}")
+            
+            # Gérer le rate limiting (429)
+            if response.status_code == 429:
+                print(f"⚠️ Rate limit atteint (429). Attente 10 secondes...")
+                await asyncio.sleep(10)
+                # Réessayer une fois
+                response = await loop.run_in_executor(
+                    None,
+                    lambda: sync_requests.get(url, params=params, timeout=10)
+                )
+                last_api_call = datetime.now()
             
             response.raise_for_status()
             data = response.json()
-            print(f"📦 Données reçues: {list(data.keys()) if data else 'vide'}")
-            print(f"📦 Données complètes: {data}")
             
             if coin_id in data:
                 token_data = data[coin_id]
@@ -150,12 +169,13 @@ class CryptoAPI:
             print(f"⏱️ Timeout API CoinGecko pour {coin_id}")
             return None
         except sync_requests.exceptions.HTTPError as e:
-            print(f"❌ Erreur HTTP API CoinGecko pour {coin_id}: {e}")
+            if e.response.status_code == 429:
+                print(f"⚠️ Rate limit CoinGecko (429). Utilisez le cache ou attendez.")
+            else:
+                print(f"❌ Erreur HTTP API CoinGecko pour {coin_id}: {e}")
             return None
         except Exception as e:
             print(f"❌ Erreur API CoinGecko pour {coin_id}: {type(e).__name__} - {str(e)}")
-            import traceback
-            traceback.print_exc()
             return None
     
     async def get_multiple_prices(self, token_ids: List[str]) -> Dict[str, tuple]:
