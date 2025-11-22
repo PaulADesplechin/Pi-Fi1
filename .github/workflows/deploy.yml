@@ -1,0 +1,35 @@
+name: Deploy to Render
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:  # Permet de déclencher manuellement
+
+jobs:
+  deploy:
+    name: Trigger Render Deployment
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Trigger Render Deploy Hook
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "⚠️  RENDER_DEPLOY_HOOK_URL n'est pas configuré dans les secrets GitHub"
+            echo "   Le déploiement se fera automatiquement via la surveillance du repo par Render.com"
+            echo "   Pour utiliser un webhook de déploiement :"
+            echo "   1. Allez dans Render.com > Votre service > Settings > Deploy Hook"
+            echo "   2. Copiez l'URL du webhook"
+            echo "   3. Ajoutez-la dans GitHub > Settings > Secrets > Actions > RENDER_DEPLOY_HOOK_URL"
+          else
+            echo "🚀 Déclenchement du déploiement sur Render.com..."
+            curl -X POST "$RENDER_DEPLOY_HOOK_URL"
+            echo "✅ Déploiement déclenché avec succès"
+          fi
+
