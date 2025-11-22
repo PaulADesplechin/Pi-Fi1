@@ -111,9 +111,14 @@ class CryptoAPI:
                 'include_market_cap': 'true',
                 'include_24hr_vol': 'true'
             }
+            
+            print(f"🔍 Requête API CoinGecko pour: {coin_id}")
             response = await self.client.get(url, params=params, timeout=15.0)
+            print(f"📡 Status code: {response.status_code}")
+            
             response.raise_for_status()
             data = response.json()
+            print(f"📦 Données reçues: {list(data.keys()) if data else 'vide'}")
             
             if coin_id in data:
                 token_data = data[coin_id]
@@ -124,17 +129,23 @@ class CryptoAPI:
                 
                 result = (price, change_24h, market_cap, volume_24h)
                 price_cache[coin_id] = (result, datetime.now())
+                print(f"✅ Prix récupéré pour {coin_id}: ${price}")
                 return result
             
             # Si pas trouvé, essayer de chercher avec search
             if not data:
-                print(f"Token {coin_id} non trouvé dans CoinGecko")
+                print(f"❌ Token {coin_id} non trouvé dans CoinGecko. Réponse: {data}")
             return None
-        except TimeoutException:
-            print(f"Timeout API CoinGecko pour {coin_id}")
+        except TimeoutException as e:
+            print(f"⏱️ Timeout API CoinGecko pour {coin_id}: {e}")
+            return None
+        except httpx.HTTPStatusError as e:
+            print(f"❌ Erreur HTTP API CoinGecko pour {coin_id}: {e.response.status_code} - {e.response.text}")
             return None
         except Exception as e:
-            print(f"Erreur API CoinGecko pour {coin_id}: {e}")
+            print(f"❌ Erreur API CoinGecko pour {coin_id}: {type(e).__name__} - {str(e)}")
+            import traceback
+            traceback.print_exc()
             return None
     
     async def get_multiple_prices(self, token_ids: List[str]) -> Dict[str, tuple]:
