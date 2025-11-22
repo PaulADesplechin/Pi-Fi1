@@ -113,7 +113,10 @@ class CryptoAPI:
                 'include_24hr_vol': 'true'
             }
             
-            print(f"🔍 Requête API CoinGecko pour: {coin_id}")
+            print(f"🔍 Requête API CoinGecko pour: {coin_id} (token_id original: {token_id})")
+            print(f"🔗 URL: {url}")
+            print(f"📋 Params: {params}")
+            
             # Utiliser requests dans un thread pour ne pas bloquer
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
@@ -122,9 +125,12 @@ class CryptoAPI:
             )
             
             print(f"📡 Status code: {response.status_code}")
+            print(f"📄 Response text (preview): {response.text[:200]}")
+            
             response.raise_for_status()
             data = response.json()
             print(f"📦 Données reçues: {list(data.keys()) if data else 'vide'}")
+            print(f"📦 Données complètes: {data}")
             
             if coin_id in data:
                 token_data = data[coin_id]
