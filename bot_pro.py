@@ -24,7 +24,24 @@ load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 ETHERSCAN_API_KEY = os.getenv('ETHERSCAN_API_KEY', '')
 COINGECKO_API_URL = 'https://api.coingecko.com/api/v3'
+BINANCE_API_URL = 'https://api.binance.com/api/v3'
 DEXSCREENER_API_URL = 'https://api.dexscreener.com/latest/dex'
+
+# Mapping des symboles vers les paires Binance
+BINANCE_SYMBOLS = {
+    'bitcoin': 'BTCUSDT',
+    'btc': 'BTCUSDT',
+    'ethereum': 'ETHUSDT',
+    'eth': 'ETHUSDT',
+    'binancecoin': 'BNBUSDT',
+    'bnb': 'BNBUSDT',
+    'solana': 'SOLUSDT',
+    'sol': 'SOLUSDT',
+    'cardano': 'ADAUSDT',
+    'ada': 'ADAUSDT',
+    'polkadot': 'DOTUSDT',
+    'dot': 'DOTUSDT',
+}
 
 # Stockage en mémoire (en production, utiliser une base de données)
 user_settings: Dict[int, Dict] = {}  # {user_id: {settings}}
@@ -105,7 +122,37 @@ class CryptoAPI:
             if isinstance(cached_result, tuple) and (datetime.now() - timestamp).seconds < CACHE_DURATION:
                 return cached_result
         
-        # Utiliser requests directement (plus simple et fiable)
+        # Essayer d'abord Binance (plus fiable, pas de rate limit strict)
+        if coin_id.lower() in BINANCE_SYMBOLS or token_id.lower() in BINANCE_SYMBOLS:
+            symbol = BINANCE_SYMBOLS.get(coin_id.lower()) or BINANCE_SYMBOLS.get(token_id.lower())
+            try:
+                print(f"🔍 Requête Binance pour: {symbol}")
+                url = f"{BINANCE_API_URL}/ticker/24hr"
+                params = {'symbol': symbol}
+                
+                loop = asyncio.get_event_loop()
+                response = await loop.run_in_executor(
+                    None,
+                    lambda: sync_requests.get(url, params=params, timeout=10)
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    price = float(data['lastPrice'])
+                    change_24h = float(data['priceChangePercent'])
+                    volume_24h = float(data['quoteVolume'])  # Volume en USDT
+                    
+                    # Market cap approximatif (Binance ne le fournit pas)
+                    market_cap = 0
+                    
+                    result = (price, change_24h, market_cap, volume_24h)
+                    price_cache[coin_id] = (result, datetime.now())
+                    print(f"✅ Prix récupéré (Binance) pour {coin_id}: ${price}")
+                    return result
+            except Exception as e:
+                print(f"⚠️ Erreur Binance pour {coin_id}: {e}")
+        
+        # Fallback sur CoinGecko si Binance échoue
         try:
             # Rate limiting : attendre entre les requêtes
             global last_api_call
@@ -113,7 +160,6 @@ class CryptoAPI:
                 time_since_last = (datetime.now() - last_api_call).total_seconds()
                 if time_since_last < MIN_API_INTERVAL:
                     wait_time = MIN_API_INTERVAL - time_since_last
-                    print(f"⏳ Rate limiting: attente {wait_time:.1f}s...")
                     await asyncio.sleep(wait_time)
             
             url = f"{COINGECKO_API_URL}/simple/price"
@@ -125,28 +171,18 @@ class CryptoAPI:
                 'include_24hr_vol': 'true'
             }
             
-            print(f"🔍 Requête API CoinGecko pour: {coin_id}")
+            print(f"🔍 Requête CoinGecko pour: {coin_id}")
             last_api_call = datetime.now()
             
-            # Utiliser requests dans un thread pour ne pas bloquer
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
                 None, 
                 lambda: sync_requests.get(url, params=params, timeout=10)
             )
             
-            print(f"📡 Status code: {response.status_code}")
-            
-            # Gérer le rate limiting (429)
             if response.status_code == 429:
-                print(f"⚠️ Rate limit atteint (429). Attente 10 secondes...")
-                await asyncio.sleep(10)
-                # Réessayer une fois
-                response = await loop.run_in_executor(
-                    None,
-                    lambda: sync_requests.get(url, params=params, timeout=10)
-                )
-                last_api_call = datetime.now()
+                print(f"⚠️ Rate limit CoinGecko (429). Utilisation du cache si disponible.")
+                return None
             
             response.raise_for_status()
             data = response.json()
@@ -160,22 +196,19 @@ class CryptoAPI:
                 
                 result = (price, change_24h, market_cap, volume_24h)
                 price_cache[coin_id] = (result, datetime.now())
-                print(f"✅ Prix récupéré pour {coin_id}: ${price}")
+                print(f"✅ Prix récupéré (CoinGecko) pour {coin_id}: ${price}")
                 return result
             
-            print(f"❌ Token {coin_id} non trouvé dans CoinGecko")
             return None
         except sync_requests.exceptions.Timeout:
-            print(f"⏱️ Timeout API CoinGecko pour {coin_id}")
+            print(f"⏱️ Timeout API pour {coin_id}")
             return None
         except sync_requests.exceptions.HTTPError as e:
             if e.response.status_code == 429:
-                print(f"⚠️ Rate limit CoinGecko (429). Utilisez le cache ou attendez.")
-            else:
-                print(f"❌ Erreur HTTP API CoinGecko pour {coin_id}: {e}")
+                print(f"⚠️ Rate limit CoinGecko (429)")
             return None
         except Exception as e:
-            print(f"❌ Erreur API CoinGecko pour {coin_id}: {type(e).__name__} - {str(e)}")
+            print(f"❌ Erreur API pour {coin_id}: {type(e).__name__}")
             return None
     
     async def get_multiple_prices(self, token_ids: List[str]) -> Dict[str, tuple]:
