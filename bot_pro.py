@@ -123,11 +123,16 @@ class CryptoAPI:
                 return cached_result
         
         # Essayer d'abord Binance (plus fiable, pas de rate limit strict)
-        symbol_key = coin_id.lower() if coin_id.lower() in BINANCE_SYMBOLS else token_id.lower()
-        if symbol_key in BINANCE_SYMBOLS:
-            symbol = BINANCE_SYMBOLS[symbol_key]
+        # Vérifier dans l'ordre: coin_id puis token_id
+        symbol = None
+        if coin_id.lower() in BINANCE_SYMBOLS:
+            symbol = BINANCE_SYMBOLS[coin_id.lower()]
+        elif token_id.lower() in BINANCE_SYMBOLS:
+            symbol = BINANCE_SYMBOLS[token_id.lower()]
+        
+        if symbol:
             try:
-                print(f"🔍 [BINANCE] Requête pour: {symbol} (coin_id: {coin_id}, token_id: {token_id})")
+                print(f"🔍 [BINANCE] Requête pour: {symbol}")
                 url = f"{BINANCE_API_URL}/ticker/24hr"
                 params = {'symbol': symbol}
                 
@@ -137,27 +142,22 @@ class CryptoAPI:
                     lambda: sync_requests.get(url, params=params, timeout=10)
                 )
                 
-                print(f"📡 [BINANCE] Status code: {response.status_code}")
+                print(f"📡 [BINANCE] Status: {response.status_code}")
                 
                 if response.status_code == 200:
                     data = response.json()
                     price = float(data['lastPrice'])
                     change_24h = float(data['priceChangePercent'])
-                    volume_24h = float(data['quoteVolume'])  # Volume en USDT
+                    volume_24h = float(data.get('quoteVolume', 0))
                     
-                    # Market cap approximatif (Binance ne le fournit pas)
-                    market_cap = 0
-                    
-                    result = (price, change_24h, market_cap, volume_24h)
+                    result = (price, change_24h, 0, volume_24h)  # market_cap = 0
                     price_cache[coin_id] = (result, datetime.now())
-                    print(f"✅ [BINANCE] Prix récupéré pour {coin_id}: ${price}")
+                    print(f"✅ [BINANCE] Prix: ${price:.2f} pour {coin_id}")
                     return result
                 else:
-                    print(f"⚠️ [BINANCE] Erreur status {response.status_code}: {response.text[:100]}")
+                    print(f"⚠️ [BINANCE] Erreur {response.status_code}")
             except Exception as e:
-                print(f"⚠️ [BINANCE] Exception pour {coin_id}: {type(e).__name__} - {str(e)}")
-                import traceback
-                traceback.print_exc()
+                print(f"⚠️ [BINANCE] Erreur: {e}")
         
         # Fallback sur CoinGecko si Binance échoue
         try:
