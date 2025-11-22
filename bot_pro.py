@@ -71,10 +71,11 @@ class SecurityValidator:
         return bool(re.match(pattern, token_id)) and len(token_id) <= 50
 
 class CryptoAPI:
-    """Classe pour les appels API crypto avec httpx async"""
+    """Classe pour les appels API crypto"""
     
     def __init__(self):
-        self.client = httpx.AsyncClient(timeout=10.0)
+        # Utiliser requests directement (plus fiable)
+        pass
     
     async def get_price(self, token_id: str) -> Optional[tuple]:
         """Récupère le prix d'un token depuis CoinGecko (avec cache)"""
@@ -103,6 +104,7 @@ class CryptoAPI:
             if isinstance(cached_result, tuple) and (datetime.now() - timestamp).seconds < CACHE_DURATION:
                 return cached_result
         
+        # Utiliser requests directement (plus simple et fiable)
         try:
             url = f"{COINGECKO_API_URL}/simple/price"
             params = {
@@ -114,9 +116,14 @@ class CryptoAPI:
             }
             
             print(f"🔍 Requête API CoinGecko pour: {coin_id}")
-            response = await self.client.get(url, params=params, timeout=15.0)
-            print(f"📡 Status code: {response.status_code}")
+            # Utiliser requests dans un thread pour ne pas bloquer
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None, 
+                lambda: sync_requests.get(url, params=params, timeout=10)
+            )
             
+            print(f"📡 Status code: {response.status_code}")
             response.raise_for_status()
             data = response.json()
             print(f"📦 Données reçues: {list(data.keys()) if data else 'vide'}")
@@ -133,46 +140,18 @@ class CryptoAPI:
                 print(f"✅ Prix récupéré pour {coin_id}: ${price}")
                 return result
             
-            # Si pas trouvé, essayer de chercher avec search
-            if not data:
-                print(f"❌ Token {coin_id} non trouvé dans CoinGecko. Réponse: {data}")
+            print(f"❌ Token {coin_id} non trouvé dans CoinGecko")
             return None
-        except TimeoutException as e:
-            print(f"⏱️ Timeout API CoinGecko pour {coin_id}: {e}")
+        except sync_requests.exceptions.Timeout:
+            print(f"⏱️ Timeout API CoinGecko pour {coin_id}")
             return None
-        except httpx.HTTPStatusError as e:
-            print(f"❌ Erreur HTTP API CoinGecko pour {coin_id}: {e.response.status_code} - {e.response.text}")
+        except sync_requests.exceptions.HTTPError as e:
+            print(f"❌ Erreur HTTP API CoinGecko pour {coin_id}: {e}")
             return None
         except Exception as e:
-            print(f"❌ Erreur API CoinGecko (httpx) pour {coin_id}: {type(e).__name__} - {str(e)}")
-            # Fallback avec requests synchrone
-            try:
-                print(f"🔄 Tentative avec requests (fallback)...")
-                url = f"{COINGECKO_API_URL}/simple/price"
-                params = {
-                    'ids': coin_id,
-                    'vs_currencies': 'usd',
-                    'include_24hr_change': 'true',
-                    'include_market_cap': 'true',
-                    'include_24hr_vol': 'true'
-                }
-                response = sync_requests.get(url, params=params, timeout=10)
-                response.raise_for_status()
-                data = response.json()
-                
-                if coin_id in data:
-                    token_data = data[coin_id]
-                    price = token_data['usd']
-                    change_24h = token_data.get('usd_24h_change', 0)
-                    market_cap = token_data.get('usd_market_cap', 0)
-                    volume_24h = token_data.get('usd_24h_vol', 0)
-                    
-                    result = (price, change_24h, market_cap, volume_24h)
-                    price_cache[coin_id] = (result, datetime.now())
-                    print(f"✅ Prix récupéré (fallback) pour {coin_id}: ${price}")
-                    return result
-            except Exception as e2:
-                print(f"❌ Erreur fallback requests: {e2}")
+            print(f"❌ Erreur API CoinGecko pour {coin_id}: {type(e).__name__} - {str(e)}")
+            import traceback
+            traceback.print_exc()
             return None
     
     async def get_multiple_prices(self, token_ids: List[str]) -> Dict[str, tuple]:
@@ -200,7 +179,11 @@ class CryptoAPI:
                 'tag': 'latest',
                 'apikey': ETHERSCAN_API_KEY
             }
-            response = await self.client.get(url, params=params)
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: sync_requests.get(url, params=params, timeout=10)
+            )
             response.raise_for_status()
             data = response.json()
             
