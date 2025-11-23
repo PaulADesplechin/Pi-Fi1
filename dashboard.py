@@ -159,21 +159,69 @@ HTML_TEMPLATE = """
                     label: 'BTC',
                     data: [],
                     borderColor: '#f7931a',
-                    tension: 0.1
+                    backgroundColor: 'rgba(247, 147, 26, 0.1)',
+                    tension: 0.4,
+                    fill: false
                 }, {
                     label: 'ETH',
                     data: [],
                     borderColor: '#627eea',
-                    tension: 0.1
+                    backgroundColor: 'rgba(98, 126, 234, 0.1)',
+                    tension: 0.4,
+                    fill: false
+                }, {
+                    label: 'SOL',
+                    data: [],
+                    borderColor: '#9945ff',
+                    backgroundColor: 'rgba(153, 69, 255, 0.1)',
+                    tension: 0.4,
+                    fill: false
+                }, {
+                    label: 'BNB',
+                    data: [],
+                    borderColor: '#f3ba2f',
+                    backgroundColor: 'rgba(243, 186, 47, 0.1)',
+                    tension: 0.4,
+                    fill: false
                 }]
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: true,
                 plugins: {
-                    legend: { display: true }
+                    legend: { 
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': $' + context.parsed.y.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                            }
+                        }
+                    }
                 },
                 scales: {
-                    y: { beginAtZero: false }
+                    y: { 
+                        beginAtZero: false,
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value.toLocaleString('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+                            }
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxTicksLimit: 10
+                        }
+                    }
+                },
+                interaction: {
+                    mode: 'nearest',
+                    axis: 'x',
+                    intersect: false
                 }
             }
         });
@@ -203,20 +251,40 @@ HTML_TEMPLATE = """
         }
         
         function updateChart(priceHistory) {
-            if (!priceHistory || !priceHistory.BTC || !priceHistory.ETH) return;
+            if (!priceHistory) return;
             
-            // Préparer les données pour le graphique
-            const btcData = priceHistory.BTC.map(item => item.price);
-            const ethData = priceHistory.ETH.map(item => item.price);
-            const labels = priceHistory.BTC.map((item, index) => {
+            // Trouver le dataset le plus long pour les labels
+            const datasets = ['BTC', 'ETH', 'SOL', 'BNB'];
+            let maxLength = 0;
+            let longestDataset = null;
+            
+            datasets.forEach(symbol => {
+                if (priceHistory[symbol] && priceHistory[symbol].length > maxLength) {
+                    maxLength = priceHistory[symbol].length;
+                    longestDataset = symbol;
+                }
+            });
+            
+            if (!longestDataset) return;
+            
+            // Préparer les labels depuis le dataset le plus long
+            const labels = priceHistory[longestDataset].map((item) => {
                 const date = new Date(item.timestamp);
                 return date.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
             });
+            
+            // Préparer les données pour chaque crypto
+            const btcData = priceHistory.BTC ? priceHistory.BTC.map(item => item.price) : [];
+            const ethData = priceHistory.ETH ? priceHistory.ETH.map(item => item.price) : [];
+            const solData = priceHistory.SOL ? priceHistory.SOL.map(item => item.price) : [];
+            const bnbData = priceHistory.BNB ? priceHistory.BNB.map(item => item.price) : [];
             
             // Mettre à jour le graphique
             chart.data.labels = labels;
             chart.data.datasets[0].data = btcData;
             chart.data.datasets[1].data = ethData;
+            chart.data.datasets[2].data = solData;
+            chart.data.datasets[3].data = bnbData;
             chart.update('none'); // Mise à jour sans animation pour être plus rapide
         }
         
@@ -304,7 +372,13 @@ def api_prices():
             'BNB': 'BNBUSDT',
             'SOL': 'SOLUSDT',
             'ADA': 'ADAUSDT',
-            'DOT': 'DOTUSDT'
+            'DOT': 'DOTUSDT',
+            'MATIC': 'MATICUSDT',
+            'AVAX': 'AVAXUSDT',
+            'LINK': 'LINKUSDT',
+            'XRP': 'XRPUSDT',
+            'DOGE': 'DOGEUSDT',
+            'LTC': 'LTCUSDT'
         }
         
         tokens_info = {
@@ -313,7 +387,13 @@ def api_prices():
             'BNB': {'symbol': 'BNB', 'name': 'BNB', 'id': 'binancecoin'},
             'SOL': {'symbol': 'SOL', 'name': 'Solana', 'id': 'solana'},
             'ADA': {'symbol': 'ADA', 'name': 'Cardano', 'id': 'cardano'},
-            'DOT': {'symbol': 'DOT', 'name': 'Polkadot', 'id': 'polkadot'}
+            'DOT': {'symbol': 'DOT', 'name': 'Polkadot', 'id': 'polkadot'},
+            'MATIC': {'symbol': 'MATIC', 'name': 'Polygon', 'id': 'matic-network'},
+            'AVAX': {'symbol': 'AVAX', 'name': 'Avalanche', 'id': 'avalanche-2'},
+            'LINK': {'symbol': 'LINK', 'name': 'Chainlink', 'id': 'chainlink'},
+            'XRP': {'symbol': 'XRP', 'name': 'Ripple', 'id': 'ripple'},
+            'DOGE': {'symbol': 'DOGE', 'name': 'Dogecoin', 'id': 'dogecoin'},
+            'LTC': {'symbol': 'LTC', 'name': 'Litecoin', 'id': 'litecoin'}
         }
         
         # Essayer Binance d'abord pour les tokens principaux

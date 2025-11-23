@@ -21,7 +21,9 @@ shared_data = {
     # Historique des prix pour le graphique
     'price_history': {
         'BTC': [],
-        'ETH': []
+        'ETH': [],
+        'SOL': [],
+        'BNB': []
     },
     
     # Dernière mise à jour
@@ -90,7 +92,8 @@ def add_price_to_history(symbol: str, price: float):
             'timestamp': datetime.now().isoformat(),
             'price': price
         })
-        # Garder seulement les 24 dernières heures (144 points si mise à jour toutes les 10 minutes)
-        if len(history) > 144:
+        # Garder seulement les 24 dernières heures (288 points si mise à jour toutes les 5 minutes)
+        # ou 144 points si mise à jour toutes les 10 minutes
+        if len(history) > 288:
             history.pop(0)
 

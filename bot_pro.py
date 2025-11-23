@@ -42,6 +42,18 @@ BINANCE_SYMBOLS = {
     'ada': 'ADAUSDT',
     'polkadot': 'DOTUSDT',
     'dot': 'DOTUSDT',
+    'matic-network': 'MATICUSDT',
+    'matic': 'MATICUSDT',
+    'avalanche-2': 'AVAXUSDT',
+    'avax': 'AVAXUSDT',
+    'chainlink': 'LINKUSDT',
+    'link': 'LINKUSDT',
+    'ripple': 'XRPUSDT',
+    'xrp': 'XRPUSDT',
+    'dogecoin': 'DOGEUSDT',
+    'doge': 'DOGEUSDT',
+    'litecoin': 'LTCUSDT',
+    'ltc': 'LTCUSDT',
 }
 
 # Stockage en mémoire (en production, utiliser une base de données)
@@ -112,7 +124,17 @@ class CryptoAPI:
             'matic': 'matic-network',
             'avax': 'avalanche-2',
             'link': 'chainlink',
-            'xrp': 'ripple'
+            'xrp': 'ripple',
+            'doge': 'dogecoin',
+            'ltc': 'litecoin',
+            'trx': 'tron',
+            'atom': 'cosmos',
+            'algo': 'algorand',
+            'near': 'near-protocol',
+            'ftm': 'fantom',
+            'mana': 'decentraland',
+            'sand': 'the-sandbox',
+            'axs': 'axie-infinity'
         }
         
         # Utiliser le mapping si disponible
@@ -171,6 +193,10 @@ class CryptoAPI:
                             add_price_to_history('BTC', price)
                         elif coin_id in ['ethereum', 'eth'] or 'eth' in coin_id.lower():
                             add_price_to_history('ETH', price)
+                        elif coin_id in ['solana', 'sol'] or 'sol' in coin_id.lower():
+                            add_price_to_history('SOL', price)
+                        elif coin_id in ['binancecoin', 'bnb'] or 'bnb' in coin_id.lower():
+                            add_price_to_history('BNB', price)
                         
                         return result
                     else:
@@ -242,6 +268,10 @@ class CryptoAPI:
                     add_price_to_history('BTC', price)
                 elif found_token_id in ['ethereum', 'eth'] or coin_id in ['ethereum', 'eth']:
                     add_price_to_history('ETH', price)
+                elif found_token_id in ['solana', 'sol'] or coin_id in ['solana', 'sol']:
+                    add_price_to_history('SOL', price)
+                elif found_token_id in ['binancecoin', 'bnb'] or coin_id in ['binancecoin', 'bnb']:
+                    add_price_to_history('BNB', price)
                 
                 return result
             
@@ -464,6 +494,18 @@ def get_prices_menu() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton("🟢 BNB", callback_data="price_binancecoin"),
             InlineKeyboardButton("⚪ DOT", callback_data="price_polkadot")
+        ],
+        [
+            InlineKeyboardButton("🟠 MATIC", callback_data="price_matic-network"),
+            InlineKeyboardButton("🔴 AVAX", callback_data="price_avalanche-2")
+        ],
+        [
+            InlineKeyboardButton("🔵 LINK", callback_data="price_chainlink"),
+            InlineKeyboardButton("⚫ XRP", callback_data="price_ripple")
+        ],
+        [
+            InlineKeyboardButton("🟡 DOGE", callback_data="price_dogecoin"),
+            InlineKeyboardButton("⚪ LTC", callback_data="price_litecoin")
         ],
         [InlineKeyboardButton("🔙 Retour", callback_data="menu_main")]
     ]
