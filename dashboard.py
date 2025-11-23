@@ -6,18 +6,12 @@ from flask import Flask, render_template_string, jsonify
 from datetime import datetime
 import requests
 import os
+from shared_data import shared_data, get_stats
 
 app = Flask(__name__)
 
-# Partager les données avec le bot (en production, utiliser une DB)
-dashboard_data = {
-    'users_count': 0,
-    'active_alerts': 0,
-    'tracked_wallets': 0,
-    'price_updates': []
-}
-
 COINGECKO_API_URL = 'https://api.coingecko.com/api/v3'
+BINANCE_API_URL = 'https://api.binance.com/api/v3'
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -198,9 +192,32 @@ HTML_TEMPLATE = """
                 if (data.prices) {
                     updatePricesList(data.prices);
                 }
+                
+                // Mettre à jour le graphique avec l'historique
+                if (data.price_history) {
+                    updateChart(data.price_history);
+                }
             } catch (error) {
                 console.error('Erreur chargement données:', error);
             }
+        }
+        
+        function updateChart(priceHistory) {
+            if (!priceHistory || !priceHistory.BTC || !priceHistory.ETH) return;
+            
+            // Préparer les données pour le graphique
+            const btcData = priceHistory.BTC.map(item => item.price);
+            const ethData = priceHistory.ETH.map(item => item.price);
+            const labels = priceHistory.BTC.map((item, index) => {
+                const date = new Date(item.timestamp);
+                return date.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
+            });
+            
+            // Mettre à jour le graphique
+            chart.data.labels = labels;
+            chart.data.datasets[0].data = btcData;
+            chart.data.datasets[1].data = ethData;
+            chart.update('none'); // Mise à jour sans animation pour être plus rapide
         }
         
         function updatePricesList(prices) {
@@ -255,45 +272,79 @@ def index():
 @app.route('/api/data')
 def api_data():
     """API pour récupérer les données du dashboard"""
+    stats = get_stats()
     return jsonify({
-        'users_count': dashboard_data.get('users_count', 0),
-        'active_alerts': dashboard_data.get('active_alerts', 0),
-        'tracked_wallets': dashboard_data.get('tracked_wallets', 0),
-        'tracked_tokens': dashboard_data.get('tracked_tokens', 0)
+        'users_count': stats['users_count'],
+        'active_alerts': stats['active_alerts'],
+        'tracked_wallets': stats['tracked_wallets'],
+        'tracked_tokens': stats['tracked_tokens'],
+        'price_history': shared_data['price_history']
     })
 
 @app.route('/api/prices')
 def api_prices():
-    """API pour récupérer les prix crypto"""
+    """API pour récupérer les prix crypto (Binance en priorité, CoinGecko en fallback)"""
     try:
-        import requests
-        url = f"{COINGECKO_API_URL}/simple/price"
-        params = {
-            'ids': 'bitcoin,ethereum,binancecoin,solana,cardano,polkadot',
-            'vs_currencies': 'usd',
-            'include_24hr_change': 'true'
+        prices = []
+        
+        # Mapping des tokens vers leurs symboles Binance
+        binance_tokens = {
+            'BTC': 'BTCUSDT',
+            'ETH': 'ETHUSDT',
+            'BNB': 'BNBUSDT',
+            'SOL': 'SOLUSDT',
+            'ADA': 'ADAUSDT',
+            'DOT': 'DOTUSDT'
         }
-        response = requests.get(url, params=params, timeout=10)
-        data = response.json()
         
         tokens_info = {
-            'bitcoin': {'symbol': 'BTC', 'name': 'Bitcoin'},
-            'ethereum': {'symbol': 'ETH', 'name': 'Ethereum'},
-            'binancecoin': {'symbol': 'BNB', 'name': 'BNB'},
-            'solana': {'symbol': 'SOL', 'name': 'Solana'},
-            'cardano': {'symbol': 'ADA', 'name': 'Cardano'},
-            'polkadot': {'symbol': 'DOT', 'name': 'Polkadot'}
+            'BTC': {'symbol': 'BTC', 'name': 'Bitcoin', 'id': 'bitcoin'},
+            'ETH': {'symbol': 'ETH', 'name': 'Ethereum', 'id': 'ethereum'},
+            'BNB': {'symbol': 'BNB', 'name': 'BNB', 'id': 'binancecoin'},
+            'SOL': {'symbol': 'SOL', 'name': 'Solana', 'id': 'solana'},
+            'ADA': {'symbol': 'ADA', 'name': 'Cardano', 'id': 'cardano'},
+            'DOT': {'symbol': 'DOT', 'name': 'Polkadot', 'id': 'polkadot'}
         }
         
-        prices = []
-        for token_id, info in tokens_info.items():
-            if token_id in data:
-                prices.append({
-                    'symbol': info['symbol'],
-                    'name': info['name'],
-                    'price': data[token_id]['usd'],
-                    'change_24h': data[token_id].get('usd_24h_change', 0)
-                })
+        # Essayer Binance d'abord pour les tokens principaux
+        for symbol, info in tokens_info.items():
+            if symbol in binance_tokens:
+                try:
+                    url = f"{BINANCE_API_URL}/ticker/24hr"
+                    params = {'symbol': binance_tokens[symbol]}
+                    response = requests.get(url, params=params, timeout=5)
+                    if response.status_code == 200:
+                        data = response.json()
+                        prices.append({
+                            'symbol': info['symbol'],
+                            'name': info['name'],
+                            'price': float(data['lastPrice']),
+                            'change_24h': float(data['priceChangePercent'])
+                        })
+                        continue
+                except:
+                    pass
+            
+            # Fallback sur CoinGecko
+            try:
+                url = f"{COINGECKO_API_URL}/simple/price"
+                params = {
+                    'ids': info['id'],
+                    'vs_currencies': 'usd',
+                    'include_24hr_change': 'true'
+                }
+                response = requests.get(url, params=params, timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    if info['id'] in data:
+                        prices.append({
+                            'symbol': info['symbol'],
+                            'name': info['name'],
+                            'price': data[info['id']]['usd'],
+                            'change_24h': data[info['id']].get('usd_24h_change', 0)
+                        })
+            except:
+                pass
         
         return jsonify({'prices': prices})
     except Exception as e:

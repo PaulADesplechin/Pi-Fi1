@@ -16,6 +16,7 @@ from telegram.ext import (
 from telegram.constants import ParseMode
 import requests as sync_requests
 from dotenv import load_dotenv
+from shared_data import shared_data, add_user, add_alert, remove_alert, add_wallet, add_price_to_history
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -48,10 +49,8 @@ user_settings: Dict[int, Dict] = {}  # {user_id: {settings}}
 tracked_tokens: Dict[int, Dict[str, float]] = {}  # {user_id: {token_id: last_price}}
 tracked_wallets: Dict[int, Set[str]] = {}  # {user_id: {wallet_addresses}}
 sniper_tokens: Dict[int, Dict] = {}  # {user_id: {filters}}
-alert_subscribers: Dict[str, Set[int]] = {  # {token: {user_ids}}
-    'ethereum': set(),
-    'bitcoin': set(),
-}
+# Utiliser shared_data pour alert_subscribers (synchronisé avec le dashboard)
+alert_subscribers = shared_data['alert_subscribers']
 
 # Cache pour éviter trop d'appels API
 price_cache: Dict[str, tuple] = {}  # {token_id: (price, timestamp)}
@@ -161,6 +160,13 @@ class CryptoAPI:
                     result = (price, change_24h, 0, volume_24h)  # market_cap = 0
                     price_cache[coin_id] = (result, datetime.now())
                     print(f"✅ [BINANCE] Prix récupéré: ${price:.2f} pour {coin_id}")
+                    
+                    # Ajouter à l'historique pour le dashboard
+                    if coin_id in ['bitcoin', 'btc']:
+                        add_price_to_history('BTC', price)
+                    elif coin_id in ['ethereum', 'eth']:
+                        add_price_to_history('ETH', price)
+                    
                     return result
                 else:
                     print(f"⚠️ [BINANCE] Erreur {response.status_code}: {response.text[:200]}")
@@ -214,6 +220,13 @@ class CryptoAPI:
                 result = (price, change_24h, market_cap, volume_24h)
                 price_cache[coin_id] = (result, datetime.now())
                 print(f"✅ Prix récupéré (CoinGecko) pour {coin_id}: ${price}")
+                
+                # Ajouter à l'historique pour le dashboard
+                if coin_id in ['bitcoin', 'btc']:
+                    add_price_to_history('BTC', price)
+                elif coin_id in ['ethereum', 'eth']:
+                    add_price_to_history('ETH', price)
+                
                 return result
             
             return None
@@ -461,6 +474,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_name = update.effective_user.first_name or "Utilisateur"
     
+    # Ajouter l'utilisateur aux données partagées
+    add_user(user_id)
+    
     # Initialiser les paramètres utilisateur
     if user_id not in user_settings:
         user_settings[user_id] = {
@@ -686,9 +702,11 @@ async def toggle_alert(query, user_id: int, token_id: str):
     
     if user_id in alert_subscribers[token_id]:
         alert_subscribers[token_id].discard(user_id)
+        remove_alert(user_id, token_id)
         status = "❌ Désactivée"
     else:
         alert_subscribers[token_id].add(user_id)
+        add_alert(user_id, token_id)
         status = "✅ Activée"
     
     await query.edit_message_text(
@@ -741,6 +759,7 @@ async def show_sniper_menu(query, user_id: int):
 
 async def show_wallets_menu(query, user_id: int):
     """Affiche le menu des wallets"""
+    # Utiliser tracked_wallets local (synchronisé avec shared_data)
     wallets = tracked_wallets.get(user_id, set())
     keyboard = []  # Initialiser keyboard avant le if/else
     
@@ -875,6 +894,11 @@ async def add_wallet_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         tracked_wallets[user_id] = set()
     
     tracked_wallets[user_id].add(address)
+    # Synchroniser avec shared_data pour le dashboard
+    add_wallet(user_id, address)
+    if user_id not in shared_data['tracked_wallets']:
+        shared_data['tracked_wallets'][user_id] = set()
+    shared_data['tracked_wallets'][user_id].add(address)
     
     balance = await crypto_api.get_wallet_balance(address)
     
