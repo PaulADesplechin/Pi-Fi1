@@ -128,18 +128,22 @@ class CryptoAPI:
         
         # Essayer d'abord Binance (plus fiable, pas de rate limit strict)
         symbol = None
+        # Vérifier dans l'ordre: coin_id, token_id, et aussi les variantes
         if coin_id in BINANCE_SYMBOLS:
             symbol = BINANCE_SYMBOLS[coin_id]
             print(f"✅ Binance disponible pour {coin_id} → {symbol}")
         elif token_id in BINANCE_SYMBOLS:
             symbol = BINANCE_SYMBOLS[token_id]
             print(f"✅ Binance disponible pour {token_id} → {symbol}")
+        elif original_token_id.lower() in BINANCE_SYMBOLS:
+            symbol = BINANCE_SYMBOLS[original_token_id.lower()]
+            print(f"✅ Binance disponible pour {original_token_id} → {symbol}")
         else:
-            print(f"⚠️ {coin_id} et {token_id} pas dans BINANCE_SYMBOLS")
+            print(f"⚠️ {coin_id}/{token_id}/{original_token_id} pas dans BINANCE_SYMBOLS")
         
         if symbol:
             try:
-                print(f"🔍 [BINANCE] Requête pour: {symbol}")
+                print(f"🔍 [BINANCE] Requête pour: {symbol} (token: {coin_id})")
                 url = f"{BINANCE_API_URL}/ticker/24hr"
                 params = {'symbol': symbol}
                 
@@ -153,21 +157,24 @@ class CryptoAPI:
                 
                 if response.status_code == 200:
                     data = response.json()
-                    price = float(data['lastPrice'])
-                    change_24h = float(data['priceChangePercent'])
-                    volume_24h = float(data.get('quoteVolume', 0))
-                    
-                    result = (price, change_24h, 0, volume_24h)  # market_cap = 0
-                    price_cache[coin_id] = (result, datetime.now())
-                    print(f"✅ [BINANCE] Prix récupéré: ${price:.2f} pour {coin_id}")
-                    
-                    # Ajouter à l'historique pour le dashboard
-                    if coin_id in ['bitcoin', 'btc']:
-                        add_price_to_history('BTC', price)
-                    elif coin_id in ['ethereum', 'eth']:
-                        add_price_to_history('ETH', price)
-                    
-                    return result
+                    if 'lastPrice' in data:
+                        price = float(data['lastPrice'])
+                        change_24h = float(data.get('priceChangePercent', 0))
+                        volume_24h = float(data.get('quoteVolume', 0))
+                        
+                        result = (price, change_24h, 0, volume_24h)  # market_cap = 0
+                        price_cache[coin_id] = (result, datetime.now())
+                        print(f"✅ [BINANCE] Prix récupéré: ${price:.2f} pour {coin_id} ({symbol})")
+                        
+                        # Ajouter à l'historique pour le dashboard
+                        if coin_id in ['bitcoin', 'btc'] or 'btc' in coin_id.lower():
+                            add_price_to_history('BTC', price)
+                        elif coin_id in ['ethereum', 'eth'] or 'eth' in coin_id.lower():
+                            add_price_to_history('ETH', price)
+                        
+                        return result
+                    else:
+                        print(f"⚠️ [BINANCE] Données invalides: {data}")
                 else:
                     print(f"⚠️ [BINANCE] Erreur {response.status_code}: {response.text[:200]}")
             except Exception as e:
@@ -210,8 +217,17 @@ class CryptoAPI:
             response.raise_for_status()
             data = response.json()
             
+            # Vérifier coin_id d'abord, puis essayer avec les variantes
+            found_token_id = None
             if coin_id in data:
-                token_data = data[coin_id]
+                found_token_id = coin_id
+            elif token_id in data:
+                found_token_id = token_id
+            elif original_token_id.lower() in data:
+                found_token_id = original_token_id.lower()
+            
+            if found_token_id:
+                token_data = data[found_token_id]
                 price = token_data['usd']
                 change_24h = token_data.get('usd_24h_change', 0)
                 market_cap = token_data.get('usd_market_cap', 0)
@@ -219,16 +235,17 @@ class CryptoAPI:
                 
                 result = (price, change_24h, market_cap, volume_24h)
                 price_cache[coin_id] = (result, datetime.now())
-                print(f"✅ Prix récupéré (CoinGecko) pour {coin_id}: ${price}")
+                print(f"✅ Prix récupéré (CoinGecko) pour {found_token_id}: ${price}")
                 
                 # Ajouter à l'historique pour le dashboard
-                if coin_id in ['bitcoin', 'btc']:
+                if found_token_id in ['bitcoin', 'btc'] or coin_id in ['bitcoin', 'btc']:
                     add_price_to_history('BTC', price)
-                elif coin_id in ['ethereum', 'eth']:
+                elif found_token_id in ['ethereum', 'eth'] or coin_id in ['ethereum', 'eth']:
                     add_price_to_history('ETH', price)
                 
                 return result
             
+            print(f"⚠️ Token {coin_id}/{token_id}/{original_token_id} non trouvé dans la réponse CoinGecko")
             return None
         except sync_requests.exceptions.Timeout:
             print(f"⏱️ Timeout API pour {coin_id}")

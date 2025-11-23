@@ -274,6 +274,11 @@ def dashboard_redirect():
     """Redirection pour compatibilité avec l'ancienne URL"""
     return render_template_string(HTML_TEMPLATE)
 
+@app.route('/health')
+def health():
+    """Endpoint de santé pour vérifier que le serveur fonctionne"""
+    return jsonify({'status': 'ok', 'service': 'dashboard'})
+
 @app.route('/api/data')
 def api_data():
     """API pour récupérer les données du dashboard"""
