@@ -160,12 +160,14 @@ class CryptoAPI:
                     
                     result = (price, change_24h, 0, volume_24h)  # market_cap = 0
                     price_cache[coin_id] = (result, datetime.now())
-                    print(f"✅ [BINANCE] Prix: ${price:.2f} pour {coin_id}")
+                    print(f"✅ [BINANCE] Prix récupéré: ${price:.2f} pour {coin_id}")
                     return result
                 else:
-                    print(f"⚠️ [BINANCE] Erreur {response.status_code}")
+                    print(f"⚠️ [BINANCE] Erreur {response.status_code}: {response.text[:200]}")
             except Exception as e:
-                print(f"⚠️ [BINANCE] Erreur: {e}")
+                print(f"⚠️ [BINANCE] Exception: {type(e).__name__} - {str(e)}")
+                import traceback
+                traceback.print_exc()
         
         # Fallback sur CoinGecko si Binance échoue
         try:
@@ -490,157 +492,192 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    user_id = query.from_user.id
-    data = query.data
-    
-    if data == "menu_main":
-        await query.edit_message_text(
-            "🏠 **Menu Principal**\n\nChoisissez une option:",
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=get_main_menu()
-        )
-    
-    elif data == "menu_prices":
-        await query.edit_message_text(
-            "💰 **Prix Crypto**\n\nSélectionnez une cryptomonnaie:",
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=get_prices_menu()
-        )
-    
-    elif data.startswith("price_"):
-        token_id = data.replace("price_", "")
-        await show_price(query, token_id)
-    
-    elif data == "menu_alerts":
-        await query.edit_message_text(
-            "🔔 **Gestion des Alertes**\n\nConfigurez vos alertes:",
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=get_alerts_menu()
-        )
-    
-    elif data.startswith("alert_toggle_"):
-        token_id = data.replace("alert_toggle_", "")
-        await toggle_alert(query, user_id, token_id)
-    
-    elif data == "menu_sniper":
-        await show_sniper_menu(query, user_id)
-    
-    elif data == "menu_rugpull":
-        await query.edit_message_text(
-            "🛡️ **Vérification Rugpull**\n\n"
-            "Envoyez l'adresse du token à vérifier:\n"
-            "Format: `0x...`",
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 Retour", callback_data="menu_main")
-            ]])
-        )
-    
-    elif data == "menu_wallets":
-        await show_wallets_menu(query, user_id)
-    
-    elif data == "menu_dashboard":
-        await query.edit_message_text(
-            "📊 **Dashboard Web**\n\n"
-            "Le dashboard web sera disponible prochainement.\n"
-            "URL: https://votre-bot.onrender.com/dashboard",
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 Retour", callback_data="menu_main")
-            ]])
-        )
-    
-    elif data == "menu_settings":
-        await show_settings(query, user_id)
-    
-    elif data == "menu_help":
-        await show_help(query)
-    
-    elif data.startswith("rugpull_"):
-        token_address = data.replace("rugpull_", "")
-        await query.edit_message_text("⏳ Analyse en cours...")
-        indicators = await crypto_api.check_rugpull_indicators(token_address)
+    try:
+        user_id = query.from_user.id
+        data = query.data
         
-        if indicators['high_risk']:
-            message = "🚨 **RISQUE ÉLEVÉ DE RUGPULL**\n\n"
+        if data == "menu_main":
+            await query.edit_message_text(
+                "🏠 **Menu Principal**\n\nChoisissez une option:",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=get_main_menu()
+            )
+        
+        elif data == "menu_prices":
+            await query.edit_message_text(
+                "💰 **Prix Crypto**\n\nSélectionnez une cryptomonnaie:",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=get_prices_menu()
+            )
+        
+        elif data.startswith("price_"):
+            token_id = data.replace("price_", "")
+            await show_price(query, token_id)
+        
+        elif data == "menu_alerts":
+            await query.edit_message_text(
+                "🔔 **Gestion des Alertes**\n\nConfigurez vos alertes:",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=get_alerts_menu()
+            )
+        
+        elif data.startswith("alert_toggle_"):
+            token_id = data.replace("alert_toggle_", "")
+            await toggle_alert(query, user_id, token_id)
+        
+        elif data == "menu_sniper":
+            await show_sniper_menu(query, user_id)
+        
+        elif data == "menu_rugpull":
+            await query.edit_message_text(
+                "🛡️ **Vérification Rugpull**\n\n"
+                "Envoyez l'adresse du token à vérifier:\n"
+                "Format: `0x...`",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 Retour", callback_data="menu_main")
+                ]])
+            )
+        
+        elif data == "menu_wallets":
+            await show_wallets_menu(query, user_id)
+        
+        elif data == "menu_dashboard":
+            await query.edit_message_text(
+                "📊 **Dashboard Web**\n\n"
+                "Le dashboard web sera disponible prochainement.\n"
+                "URL: https://votre-bot.onrender.com/dashboard",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 Retour", callback_data="menu_main")
+                ]])
+            )
+        
+        elif data == "menu_settings":
+            await show_settings(query, user_id)
+        
+        elif data == "menu_help":
+            await show_help(query)
+        
+        elif data.startswith("rugpull_"):
+            token_address = data.replace("rugpull_", "")
+            await query.edit_message_text("⏳ Analyse en cours...")
+            indicators = await crypto_api.check_rugpull_indicators(token_address)
+            
+            if indicators['high_risk']:
+                message = "🚨 **RISQUE ÉLEVÉ DE RUGPULL**\n\n"
+            else:
+                message = f"🛡️ **Score de sécurité: {indicators['score']}/100**\n\n"
+            
+            if indicators['warnings']:
+                message += "⚠️ **Avertissements:**\n"
+                for warning in indicators['warnings']:
+                    message += f"• {warning}\n"
+            else:
+                message += "✅ Aucun avertissement détecté"
+            
+            keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="menu_main")]]
+            await query.edit_message_text(
+                message,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        
+        elif data.startswith("wallet_"):
+            wallet_address = data.replace("wallet_", "")
+            balance = await crypto_api.get_wallet_balance(wallet_address)
+            
+            message = f"👛 **Wallet**\n\n📍 `{wallet_address}`\n"
+            if balance is not None:
+                eth_price, _, _, _ = await crypto_api.get_price('ethereum') or (0, 0, 0, 0)
+                value_usd = balance * eth_price if eth_price else 0
+                message += f"💎 Balance: {balance:.6f} ETH\n"
+                message += f"💵 Valeur: ${value_usd:,.2f}"
+            else:
+                message += "❌ Impossible de récupérer le solde"
+            
+            keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="menu_wallets")]]
+            await query.edit_message_text(
+                message,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+    
+        elif data.startswith("alert_add_"):
+            token_id = data.replace("alert_add_", "")
+            await toggle_alert(query, user_id, token_id)
+        
         else:
-            message = f"🛡️ **Score de sécurité: {indicators['score']}/100**\n\n"
-        
-        if indicators['warnings']:
-            message += "⚠️ **Avertissements:**\n"
-            for warning in indicators['warnings']:
-                message += f"• {warning}\n"
-        else:
-            message += "✅ Aucun avertissement détecté"
-        
-        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="menu_main")]]
-        await query.edit_message_text(
-            message,
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-    
-    elif data.startswith("wallet_"):
-        wallet_address = data.replace("wallet_", "")
-        balance = await crypto_api.get_wallet_balance(wallet_address)
-        
-        message = f"👛 **Wallet**\n\n📍 `{wallet_address}`\n"
-        if balance is not None:
-            eth_price, _, _, _ = await crypto_api.get_price('ethereum') or (0, 0, 0, 0)
-            value_usd = balance * eth_price if eth_price else 0
-            message += f"💎 Balance: {balance:.6f} ETH\n"
-            message += f"💵 Valeur: ${value_usd:,.2f}"
-        else:
-            message += "❌ Impossible de récupérer le solde"
-        
-        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="menu_wallets")]]
-        await query.edit_message_text(
-            message,
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-    
-    elif data.startswith("alert_add_"):
-        token_id = data.replace("alert_add_", "")
-        await toggle_alert(query, user_id, token_id)
+            # Callback non reconnu
+            await query.edit_message_text(
+                "❌ Action non reconnue",
+                reply_markup=get_main_menu()
+            )
+    except Exception as e:
+        print(f"Erreur dans button_handler: {e}")
+        import traceback
+        traceback.print_exc()
+        try:
+            await query.edit_message_text(
+                "❌ Une erreur est survenue. Retour au menu principal.",
+                reply_markup=get_main_menu()
+            )
+        except:
+            pass
 
 async def show_price(query, token_id: str):
     """Affiche le prix d'un token"""
-    await query.edit_message_text("⏳ Récupération du prix...")
-    
-    result = await crypto_api.get_price(token_id)
-    
-    if not result:
+    try:
+        await query.edit_message_text("⏳ Récupération du prix...")
+        
+        result = await crypto_api.get_price(token_id)
+        
+        if not result:
+            await query.edit_message_text(
+                f"❌ Impossible de récupérer le prix de {token_id}\n\n"
+                "💡 Essayez:\n"
+                "• `/price btc` ou `/price eth`\n"
+                "• Utilisez le menu 💰 Prix Crypto",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 Retour", callback_data="menu_prices")
+                ]])
+            )
+            return
+        
+        price, change_24h, market_cap, volume_24h = result
+        change_emoji = "📈" if change_24h >= 0 else "📉"
+        change_color = "🟢" if change_24h >= 0 else "🔴"
+        
+        # Formater market_cap et volume (peuvent être 0 pour Binance)
+        market_cap_str = f"${market_cap:,.0f}" if market_cap > 0 else "N/A"
+        volume_str = f"${volume_24h:,.0f}" if volume_24h > 0 else "N/A"
+        
+        message = (
+            f"{change_emoji} **{token_id.upper()}**\n\n"
+            f"💵 Prix: **${price:,.4f}**\n"
+            f"{change_color} 24h: {change_24h:+.2f}%\n"
+            f"📊 Market Cap: {market_cap_str}\n"
+            f"💹 Volume 24h: {volume_str}"
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton("🔔 Activer Alerte", callback_data=f"alert_add_{token_id}")],
+            [InlineKeyboardButton("🔙 Retour", callback_data="menu_prices")]
+        ]
+        
         await query.edit_message_text(
-            f"❌ Impossible de récupérer le prix de {token_id}",
+            message,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    except Exception as e:
+        print(f"Erreur dans show_price: {e}")
+        await query.edit_message_text(
+            f"❌ Erreur lors de la récupération du prix.\n\nErreur: {str(e)}",
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton("🔙 Retour", callback_data="menu_prices")
             ]])
         )
-        return
-    
-    price, change_24h, market_cap, volume_24h = result
-    change_emoji = "📈" if change_24h >= 0 else "📉"
-    change_color = "🟢" if change_24h >= 0 else "🔴"
-    
-    message = (
-        f"{change_emoji} **{token_id.upper()}**\n\n"
-        f"💵 Prix: **${price:,.4f}**\n"
-        f"{change_color} 24h: {change_24h:+.2f}%\n"
-        f"📊 Market Cap: ${market_cap:,.0f}\n"
-        f"💹 Volume 24h: ${volume_24h:,.0f}"
-    )
-    
-    keyboard = [
-        [InlineKeyboardButton("🔔 Activer Alerte", callback_data=f"alert_add_{token_id}")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="menu_prices")]
-    ]
-    
-    await query.edit_message_text(
-        message,
-        parse_mode=ParseMode.MARKDOWN,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
 
 async def toggle_alert(query, user_id: int, token_id: str):
     """Active/désactive une alerte"""
@@ -705,6 +742,7 @@ async def show_sniper_menu(query, user_id: int):
 async def show_wallets_menu(query, user_id: int):
     """Affiche le menu des wallets"""
     wallets = tracked_wallets.get(user_id, set())
+    keyboard = []  # Initialiser keyboard avant le if/else
     
     if not wallets:
         message = (
@@ -715,7 +753,6 @@ async def show_wallets_menu(query, user_id: int):
         )
     else:
         message = "👛 **Mes Wallets**\n\n"
-        keyboard = []
         for i, wallet in enumerate(list(wallets)[:5]):
             short_addr = f"{wallet[:6]}...{wallet[-4]}"
             message += f"{i+1}. `{short_addr}`\n"
