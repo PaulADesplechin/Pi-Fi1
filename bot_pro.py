@@ -107,7 +107,7 @@ class CryptoAPI:
         pass
     
     async def get_price(self, token_id: str) -> Optional[tuple]:
-        """Récupère le prix d'un token"""
+        """Récupère le prix d'un token avec retry automatique"""
         original_token_id = token_id
         token_id = token_id.lower()
         
@@ -141,152 +141,177 @@ class CryptoAPI:
         coin_id = token_mapping.get(token_id, token_id)
         print(f"📝 coin_id après mapping: '{coin_id}'")
         
-        # Vérifier le cache
+        # Vérifier le cache d'abord
         if coin_id in price_cache:
             cached_result, timestamp = price_cache[coin_id]
             if isinstance(cached_result, tuple) and (datetime.now() - timestamp).seconds < CACHE_DURATION:
                 print(f"💾 Cache hit pour {coin_id}")
                 return cached_result
         
-        # Essayer d'abord Binance (plus fiable, pas de rate limit strict)
-        symbol = None
-        # Vérifier dans l'ordre: coin_id, token_id, et aussi les variantes
-        if coin_id in BINANCE_SYMBOLS:
-            symbol = BINANCE_SYMBOLS[coin_id]
-            print(f"✅ Binance disponible pour {coin_id} → {symbol}")
-        elif token_id in BINANCE_SYMBOLS:
-            symbol = BINANCE_SYMBOLS[token_id]
-            print(f"✅ Binance disponible pour {token_id} → {symbol}")
-        elif original_token_id.lower() in BINANCE_SYMBOLS:
-            symbol = BINANCE_SYMBOLS[original_token_id.lower()]
-            print(f"✅ Binance disponible pour {original_token_id} → {symbol}")
-        else:
-            print(f"⚠️ {coin_id}/{token_id}/{original_token_id} pas dans BINANCE_SYMBOLS")
-        
-        if symbol:
+        # Essayer plusieurs fois en cas d'échec
+        max_retries = 2
+        for attempt in range(max_retries):
+            if attempt > 0:
+                print(f"🔄 Tentative {attempt + 1}/{max_retries} pour {coin_id}")
+                await asyncio.sleep(1)  # Attendre 1 seconde entre les tentatives
+            
+            # Essayer d'abord Binance (plus fiable, pas de rate limit strict)
+            symbol = None
+            if coin_id in BINANCE_SYMBOLS:
+                symbol = BINANCE_SYMBOLS[coin_id]
+                print(f"✅ Binance disponible pour {coin_id} → {symbol}")
+            elif token_id in BINANCE_SYMBOLS:
+                symbol = BINANCE_SYMBOLS[token_id]
+                print(f"✅ Binance disponible pour {token_id} → {symbol}")
+            elif original_token_id.lower() in BINANCE_SYMBOLS:
+                symbol = BINANCE_SYMBOLS[original_token_id.lower()]
+                print(f"✅ Binance disponible pour {original_token_id} → {symbol}")
+            
+            if symbol:
+                try:
+                    print(f"🔍 [BINANCE] Requête pour: {symbol} (token: {coin_id})")
+                    url = f"{BINANCE_API_URL}/ticker/24hr"
+                    params = {'symbol': symbol}
+                    
+                    loop = asyncio.get_event_loop()
+                    response = await loop.run_in_executor(
+                        None,
+                        lambda: sync_requests.get(url, params=params, timeout=15)
+                    )
+                    
+                    print(f"📡 [BINANCE] Status: {response.status_code}")
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        if 'lastPrice' in data:
+                            price = float(data['lastPrice'])
+                            change_24h = float(data.get('priceChangePercent', 0))
+                            volume_24h = float(data.get('quoteVolume', 0))
+                            
+                            result = (price, change_24h, 0, volume_24h)  # market_cap = 0
+                            price_cache[coin_id] = (result, datetime.now())
+                            print(f"✅ [BINANCE] Prix récupéré: ${price:.2f} pour {coin_id} ({symbol})")
+                            
+                            # Ajouter à l'historique pour le dashboard
+                            if coin_id in ['bitcoin', 'btc'] or 'btc' in coin_id.lower():
+                                add_price_to_history('BTC', price)
+                            elif coin_id in ['ethereum', 'eth'] or 'eth' in coin_id.lower():
+                                add_price_to_history('ETH', price)
+                            elif coin_id in ['solana', 'sol'] or 'sol' in coin_id.lower():
+                                add_price_to_history('SOL', price)
+                            elif coin_id in ['binancecoin', 'bnb'] or 'bnb' in coin_id.lower():
+                                add_price_to_history('BNB', price)
+                            
+                            return result
+                        else:
+                            print(f"⚠️ [BINANCE] Données invalides: {list(data.keys())[:5]}")
+                    else:
+                        print(f"⚠️ [BINANCE] Erreur {response.status_code}: {response.text[:200]}")
+                except Exception as e:
+                    print(f"⚠️ [BINANCE] Exception: {type(e).__name__} - {str(e)}")
+                    if attempt < max_retries - 1:
+                        continue  # Réessayer
+            
+            # Fallback sur CoinGecko si Binance échoue
             try:
-                print(f"🔍 [BINANCE] Requête pour: {symbol} (token: {coin_id})")
-                url = f"{BINANCE_API_URL}/ticker/24hr"
-                params = {'symbol': symbol}
+                # Rate limiting : attendre entre les requêtes
+                global last_api_call
+                if last_api_call:
+                    time_since_last = (datetime.now() - last_api_call).total_seconds()
+                    if time_since_last < MIN_API_INTERVAL:
+                        wait_time = MIN_API_INTERVAL - time_since_last
+                        await asyncio.sleep(wait_time)
+                
+                url = f"{COINGECKO_API_URL}/simple/price"
+                params = {
+                    'ids': coin_id,
+                    'vs_currencies': 'usd',
+                    'include_24hr_change': 'true',
+                    'include_market_cap': 'true',
+                    'include_24hr_vol': 'true'
+                }
+                
+                print(f"🔍 [COINGECKO] Requête pour: {coin_id} (fallback après Binance)")
+                last_api_call = datetime.now()
                 
                 loop = asyncio.get_event_loop()
                 response = await loop.run_in_executor(
-                    None,
-                    lambda: sync_requests.get(url, params=params, timeout=10)
+                    None, 
+                    lambda: sync_requests.get(url, params=params, timeout=15)
                 )
                 
-                print(f"📡 [BINANCE] Status: {response.status_code}")
+                if response.status_code == 429:
+                    print(f"⚠️ Rate limit CoinGecko (429). Tentative {attempt + 1}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(3)  # Attendre plus longtemps pour rate limit
+                        continue
+                    return None
                 
-                if response.status_code == 200:
-                    data = response.json()
-                    if 'lastPrice' in data:
-                        price = float(data['lastPrice'])
-                        change_24h = float(data.get('priceChangePercent', 0))
-                        volume_24h = float(data.get('quoteVolume', 0))
-                        
-                        result = (price, change_24h, 0, volume_24h)  # market_cap = 0
-                        price_cache[coin_id] = (result, datetime.now())
-                        print(f"✅ [BINANCE] Prix récupéré: ${price:.2f} pour {coin_id} ({symbol})")
-                        
-                        # Ajouter à l'historique pour le dashboard
-                        if coin_id in ['bitcoin', 'btc'] or 'btc' in coin_id.lower():
-                            add_price_to_history('BTC', price)
-                        elif coin_id in ['ethereum', 'eth'] or 'eth' in coin_id.lower():
-                            add_price_to_history('ETH', price)
-                        elif coin_id in ['solana', 'sol'] or 'sol' in coin_id.lower():
-                            add_price_to_history('SOL', price)
-                        elif coin_id in ['binancecoin', 'bnb'] or 'bnb' in coin_id.lower():
-                            add_price_to_history('BNB', price)
-                        
-                        return result
-                    else:
-                        print(f"⚠️ [BINANCE] Données invalides: {data}")
-                else:
-                    print(f"⚠️ [BINANCE] Erreur {response.status_code}: {response.text[:200]}")
+                response.raise_for_status()
+                data = response.json()
+                
+                # Vérifier coin_id d'abord, puis essayer avec les variantes
+                found_token_id = None
+                if coin_id in data:
+                    found_token_id = coin_id
+                elif token_id in data:
+                    found_token_id = token_id
+                elif original_token_id.lower() in data:
+                    found_token_id = original_token_id.lower()
+                
+                if found_token_id:
+                    token_data = data[found_token_id]
+                    price = token_data['usd']
+                    change_24h = token_data.get('usd_24h_change', 0)
+                    market_cap = token_data.get('usd_market_cap', 0)
+                    volume_24h = token_data.get('usd_24h_vol', 0)
+                    
+                    result = (price, change_24h, market_cap, volume_24h)
+                    price_cache[coin_id] = (result, datetime.now())
+                    print(f"✅ Prix récupéré (CoinGecko) pour {found_token_id}: ${price}")
+                    
+                    # Ajouter à l'historique pour le dashboard
+                    if found_token_id in ['bitcoin', 'btc'] or coin_id in ['bitcoin', 'btc']:
+                        add_price_to_history('BTC', price)
+                    elif found_token_id in ['ethereum', 'eth'] or coin_id in ['ethereum', 'eth']:
+                        add_price_to_history('ETH', price)
+                    elif found_token_id in ['solana', 'sol'] or coin_id in ['solana', 'sol']:
+                        add_price_to_history('SOL', price)
+                    elif found_token_id in ['binancecoin', 'bnb'] or coin_id in ['binancecoin', 'bnb']:
+                        add_price_to_history('BNB', price)
+                    
+                    return result
+                
+                print(f"⚠️ Token {coin_id}/{token_id}/{original_token_id} non trouvé dans la réponse CoinGecko")
+                if attempt < max_retries - 1:
+                    continue  # Réessayer
+                return None
+            except sync_requests.exceptions.Timeout:
+                print(f"⏱️ Timeout API pour {coin_id} (tentative {attempt + 1})")
+                if attempt < max_retries - 1:
+                    continue  # Réessayer
+                return None
+            except sync_requests.exceptions.HTTPError as e:
+                if e.response.status_code == 429:
+                    print(f"⚠️ Rate limit CoinGecko (429) - tentative {attempt + 1}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(3)  # Attendre plus longtemps pour rate limit
+                        continue
+                print(f"⚠️ Erreur HTTP CoinGecko: {e.response.status_code}")
+                if attempt < max_retries - 1:
+                    continue
+                return None
             except Exception as e:
-                print(f"⚠️ [BINANCE] Exception: {type(e).__name__} - {str(e)}")
+                print(f"❌ Erreur API pour {coin_id}: {type(e).__name__} - {str(e)}")
                 import traceback
                 traceback.print_exc()
-        
-        # Fallback sur CoinGecko si Binance échoue
-        try:
-            # Rate limiting : attendre entre les requêtes
-            global last_api_call
-            if last_api_call:
-                time_since_last = (datetime.now() - last_api_call).total_seconds()
-                if time_since_last < MIN_API_INTERVAL:
-                    wait_time = MIN_API_INTERVAL - time_since_last
-                    await asyncio.sleep(wait_time)
-            
-            url = f"{COINGECKO_API_URL}/simple/price"
-            params = {
-                'ids': coin_id,
-                'vs_currencies': 'usd',
-                'include_24hr_change': 'true',
-                'include_market_cap': 'true',
-                'include_24hr_vol': 'true'
-            }
-            
-            print(f"🔍 [COINGECKO] Requête pour: {coin_id} (fallback après Binance)")
-            last_api_call = datetime.now()
-            
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None, 
-                lambda: sync_requests.get(url, params=params, timeout=10)
-            )
-            
-            if response.status_code == 429:
-                print(f"⚠️ Rate limit CoinGecko (429). Utilisation du cache si disponible.")
+                if attempt < max_retries - 1:
+                    continue  # Réessayer
                 return None
-            
-            response.raise_for_status()
-            data = response.json()
-            
-            # Vérifier coin_id d'abord, puis essayer avec les variantes
-            found_token_id = None
-            if coin_id in data:
-                found_token_id = coin_id
-            elif token_id in data:
-                found_token_id = token_id
-            elif original_token_id.lower() in data:
-                found_token_id = original_token_id.lower()
-            
-            if found_token_id:
-                token_data = data[found_token_id]
-                price = token_data['usd']
-                change_24h = token_data.get('usd_24h_change', 0)
-                market_cap = token_data.get('usd_market_cap', 0)
-                volume_24h = token_data.get('usd_24h_vol', 0)
-                
-                result = (price, change_24h, market_cap, volume_24h)
-                price_cache[coin_id] = (result, datetime.now())
-                print(f"✅ Prix récupéré (CoinGecko) pour {found_token_id}: ${price}")
-                
-                # Ajouter à l'historique pour le dashboard
-                if found_token_id in ['bitcoin', 'btc'] or coin_id in ['bitcoin', 'btc']:
-                    add_price_to_history('BTC', price)
-                elif found_token_id in ['ethereum', 'eth'] or coin_id in ['ethereum', 'eth']:
-                    add_price_to_history('ETH', price)
-                elif found_token_id in ['solana', 'sol'] or coin_id in ['solana', 'sol']:
-                    add_price_to_history('SOL', price)
-                elif found_token_id in ['binancecoin', 'bnb'] or coin_id in ['binancecoin', 'bnb']:
-                    add_price_to_history('BNB', price)
-                
-                return result
-            
-            print(f"⚠️ Token {coin_id}/{token_id}/{original_token_id} non trouvé dans la réponse CoinGecko")
-            return None
-        except sync_requests.exceptions.Timeout:
-            print(f"⏱️ Timeout API pour {coin_id}")
-            return None
-        except sync_requests.exceptions.HTTPError as e:
-            if e.response.status_code == 429:
-                print(f"⚠️ Rate limit CoinGecko (429)")
-            return None
-        except Exception as e:
-            print(f"❌ Erreur API pour {coin_id}: {type(e).__name__}")
-            return None
+        
+        # Si toutes les tentatives ont échoué
+        print(f"❌ Impossible de récupérer le prix de {coin_id} après {max_retries} tentatives")
+        return None
     
     async def get_multiple_prices(self, token_ids: List[str]) -> Dict[str, tuple]:
         """Récupère plusieurs prix en parallèle"""
