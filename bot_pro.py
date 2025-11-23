@@ -559,10 +559,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_wallets_menu(query, user_id)
         
         elif data == "menu_dashboard":
+            # Récupérer l'URL du dashboard depuis les variables d'environnement ou utiliser une valeur par défaut
+            dashboard_url = os.getenv('DASHBOARD_URL', 'https://pi-fi1.onrender.com')
             await query.edit_message_text(
-                "📊 **Dashboard Web**\n\n"
-                "Le dashboard web sera disponible prochainement.\n"
-                "URL: https://votre-bot.onrender.com/dashboard",
+                f"📊 **Dashboard Web**\n\n"
+                f"Accédez au dashboard en temps réel:\n"
+                f"🌐 {dashboard_url}\n\n"
+                f"Le dashboard affiche:\n"
+                f"• Nombre d'utilisateurs\n"
+                f"• Alertes actives\n"
+                f"• Wallets suivis\n"
+                f"• Prix crypto en direct",
                 parse_mode=ParseMode.MARKDOWN,
                 reply_markup=InlineKeyboardMarkup([[
                     InlineKeyboardButton("🔙 Retour", callback_data="menu_main")

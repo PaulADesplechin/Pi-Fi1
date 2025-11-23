@@ -269,6 +269,11 @@ def index():
     """Page principale du dashboard"""
     return render_template_string(HTML_TEMPLATE)
 
+@app.route('/dashboard')
+def dashboard_redirect():
+    """Redirection pour compatibilité avec l'ancienne URL"""
+    return render_template_string(HTML_TEMPLATE)
+
 @app.route('/api/data')
 def api_data():
     """API pour récupérer les données du dashboard"""
