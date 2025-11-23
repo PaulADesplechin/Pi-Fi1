@@ -361,12 +361,12 @@ def api_prices():
         return jsonify({'error': str(e), 'prices': []}), 500
 
 def run_dashboard(host='0.0.0.0', port=None):
-    """Lance le serveur dashboard"""
+    """Lance le serveur dashboard (utilisé pour le développement local)"""
     # Utiliser le port de Render ou 5000 par défaut
     if port is None:
         port = int(os.getenv('PORT', 5000))
     print(f"📊 Dashboard démarré sur http://{host}:{port}")
-    app.run(host=host, port=port, debug=False)
+    app.run(host=host, port=port, debug=False, threaded=True)
 
 if __name__ == '__main__':
     run_dashboard()
