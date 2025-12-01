@@ -2003,19 +2003,7 @@
                 } else {
                     // Dernier recours: fetch direct
                     fetch('/.netlify/functions/server/api/prices?t=' + Date.now())
-                        .then(response => {
-                            const contentType = response.headers.get('content-type') || '';
-                            if (contentType.includes('text/html')) {
-                                throw new Error('Réponse HTML au lieu de JSON');
-                            }
-                            return response.text();
-                        })
-                        .then(text => {
-                            if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
-                                throw new Error('Réponse HTML au lieu de JSON');
-                            }
-                            return JSON.parse(text);
-                        })
+                        .then(response => response.json())
                         .then(data => {
                             if (data.prices && typeof updatePricesList === 'function') {
                                 updatePricesList(data.prices);
