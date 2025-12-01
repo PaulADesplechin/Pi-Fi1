@@ -4,7 +4,6 @@ Version directe sans Flask pour éviter les problèmes
 """
 import json
 import requests
-import os
 
 COINGECKO_API_URL = 'https://api.coingecko.com/api/v3'
 
@@ -25,6 +24,14 @@ def handler(event, context):
             'XRP': {'symbol': 'XRP', 'name': 'Ripple', 'id': 'ripple'},
             'DOGE': {'symbol': 'DOGE', 'name': 'Dogecoin', 'id': 'dogecoin'},
             'LTC': {'symbol': 'LTC', 'name': 'Litecoin', 'id': 'litecoin'},
+            'TRX': {'symbol': 'TRX', 'name': 'Tron', 'id': 'tron'},
+            'ATOM': {'symbol': 'ATOM', 'name': 'Cosmos', 'id': 'cosmos'},
+            'ALGO': {'symbol': 'ALGO', 'name': 'Algorand', 'id': 'algorand'},
+            'NEAR': {'symbol': 'NEAR', 'name': 'Near', 'id': 'near-protocol'},
+            'FTM': {'symbol': 'FTM', 'name': 'Fantom', 'id': 'fantom'},
+            'MANA': {'symbol': 'MANA', 'name': 'Decentraland', 'id': 'decentraland'},
+            'SAND': {'symbol': 'SAND', 'name': 'The Sandbox', 'id': 'the-sandbox'},
+            'AXS': {'symbol': 'AXS', 'name': 'Axie Infinity', 'id': 'axie-infinity'},
         }
         
         # Récupérer les prix depuis CoinGecko
@@ -69,15 +76,19 @@ def handler(event, context):
                     'Content-Type': 'application/json; charset=utf-8',
                     'Access-Control-Allow-Origin': '*',
                 },
-                'body': json.dumps({'error': 'Erreur API CoinGecko'}, ensure_ascii=False)
+                'body': json.dumps({'error': 'Erreur API CoinGecko', 'status': response.status_code}, ensure_ascii=False)
             }
     except Exception as e:
+        import traceback
         return {
             'statusCode': 500,
             'headers': {
                 'Content-Type': 'application/json; charset=utf-8',
                 'Access-Control-Allow-Origin': '*',
             },
-            'body': json.dumps({'error': str(e)}, ensure_ascii=False)
+            'body': json.dumps({
+                'error': str(e),
+                'type': type(e).__name__
+            }, ensure_ascii=False)
         }
 
