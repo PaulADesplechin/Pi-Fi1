@@ -1,6 +1,6 @@
 """
 Netlify Serverless Function pour π-FI Dashboard
-Version corrigée et fonctionnelle
+Version complètement fonctionnelle
 """
 import sys
 import os
@@ -12,7 +12,7 @@ sys.path.insert(0, base_dir)
 
 print(f"📁 Base directory: {base_dir}")
 print(f"📁 Current directory: {os.getcwd()}")
-print(f"📁 Python path: {sys.path}")
+print(f"📁 Python path: {sys.path[:3]}")
 
 # Importer Flask app
 app = None
@@ -29,20 +29,19 @@ def handler(event, context):
     """
     Handler Netlify Function pour Flask
     """
-    print(f"📥 Event reçu: {json.dumps(event, indent=2, default=str)}")
+    print(f"📥 Event reçu: method={event.get('httpMethod', event.get('method', 'GET'))}, path={event.get('path', event.get('rawPath', '/'))}")
     
     if app is None:
         return {
             'statusCode': 500,
             'headers': {
-                'Content-Type': 'application/json',
+                'Content-Type': 'application/json; charset=utf-8',
                 'Access-Control-Allow-Origin': '*',
             },
             'body': json.dumps({
                 'error': 'Application Flask non disponible',
                 'base_dir': base_dir,
-                'current_dir': os.getcwd(),
-                'python_path': sys.path
+                'current_dir': os.getcwd()
             })
         }
     
@@ -68,30 +67,41 @@ def handler(event, context):
             query_params = event['queryStringParameters']
         elif 'query' in event and event['query']:
             query_params = event['query']
+        elif 'multiValueQueryStringParameters' in event and event['multiValueQueryStringParameters']:
+            # Convertir multiValue en simple
+            query_params = {k: v[0] if isinstance(v, list) else v 
+                          for k, v in event['multiValueQueryStringParameters'].items()}
         
         # Extraire les headers
         headers = event.get('headers', {}) or {}
+        if not isinstance(headers, dict):
+            headers = {}
         
         # Extraire le body
         body = event.get('body', '') or ''
+        if body and isinstance(body, str) and event.get('isBase64Encoded'):
+            import base64
+            body = base64.b64decode(body).decode('utf-8')
         
         # Créer l'événement Lambda pour serverless-wsgi
         lambda_event = {
             'httpMethod': http_method,
             'path': path,
             'queryStringParameters': query_params,
-            'multiValueQueryStringParameters': {},
+            'multiValueQueryStringParameters': {k: [v] if not isinstance(v, list) else v 
+                                              for k, v in query_params.items()},
             'headers': headers,
-            'multiValueHeaders': {},
+            'multiValueHeaders': {k: [v] if not isinstance(v, list) else v 
+                                for k, v in headers.items()},
             'body': body,
             'isBase64Encoded': False,
             'requestContext': {
-                'requestId': context.get('requestId', 'netlify-' + str(os.getpid())),
+                'requestId': context.get('requestId', f'netlify-{os.getpid()}'),
                 'stage': '$default',
                 'httpMethod': http_method,
                 'path': path,
                 'identity': {
-                    'sourceIp': headers.get('x-forwarded-for', '127.0.0.1')
+                    'sourceIp': headers.get('x-forwarded-for', headers.get('x-real-ip', '127.0.0.1'))
                 }
             }
         }
@@ -104,8 +114,6 @@ def handler(event, context):
         response = handle_request(app, lambda_event, context)
         
         print(f"✅ Réponse reçue: statusCode={response.get('statusCode', 'N/A')}")
-        print(f"✅ Headers: {response.get('headers', {})}")
-        print(f"✅ Body type: {type(response.get('body', ''))}")
         
         # S'assurer que les headers sont présents
         if 'headers' not in response:
@@ -121,51 +129,40 @@ def handler(event, context):
                 response['headers']['Content-Type'] = 'application/json; charset=utf-8'
         
         # Vérifier si le body contient du HTML au lieu de JSON (erreur)
-        body = response.get('body', '')
-        if isinstance(body, str) and path.startswith('/api/') and body.strip().startswith('<!DOCTYPE'):
-            print(f"⚠️ ATTENTION: La route API retourne du HTML au lieu de JSON!")
-            print(f"⚠️ Body preview: {body[:200]}")
-            # Retourner une erreur JSON valide
-            response['body'] = json.dumps({
-                'error': 'La fonction serverless a retourné du HTML au lieu de JSON',
-                'path': path,
-                'statusCode': response.get('statusCode', 500)
-            })
-            response['headers']['Content-Type'] = 'application/json; charset=utf-8'
-            response['statusCode'] = 500
+        body_content = response.get('body', '')
+        if isinstance(body_content, str) and path.startswith('/api/'):
+            # Vérifier si c'est du HTML
+            body_stripped = body_content.strip()
+            if body_stripped.startswith('<!DOCTYPE') or body_stripped.startswith('<html') or '<body' in body_stripped:
+                print(f"⚠️ ATTENTION: La route API retourne du HTML au lieu de JSON!")
+                print(f"⚠️ Body preview: {body_stripped[:300]}")
+                # Retourner une erreur JSON valide
+                response['body'] = json.dumps({
+                    'error': 'La fonction serverless a retourné du HTML au lieu de JSON',
+                    'path': path,
+                    'statusCode': response.get('statusCode', 500),
+                    'message': 'Utilisez Render.com pour une meilleure compatibilité Flask'
+                })
+                response['headers']['Content-Type'] = 'application/json; charset=utf-8'
+                response['statusCode'] = 500
         
         # Retourner la réponse
         return response
             
     except ImportError as e:
         print(f"❌ ImportError: {e}")
+        error_response = {
+            'error': 'serverless-wsgi non disponible',
+            'message': str(e),
+            'solution': 'Installez serverless-wsgi dans netlify/functions/server/requirements.txt'
+        }
         return {
             'statusCode': 500,
             'headers': {
-                'Content-Type': 'text/html; charset=utf-8',
+                'Content-Type': 'application/json; charset=utf-8',
                 'Access-Control-Allow-Origin': '*',
             },
-            'body': f'''
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>π-FI Dashboard - Erreur</title>
-                <meta charset="UTF-8">
-                <style>
-                    body {{ font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; background: #020915; color: #F5F9FF; }}
-                    h1 {{ color: #00AFFF; }}
-                    .error {{ color: #ef4444; }}
-                    code {{ background: #06101C; padding: 2px 6px; border-radius: 4px; }}
-                </style>
-            </head>
-            <body>
-                <h1>π-FI | AI Powered Finance & Intelligence</h1>
-                <p class="error">❌ Erreur: serverless-wsgi non disponible</p>
-                <p>Vérifiez que <code>serverless-wsgi>=0.8.2</code> est dans <code>netlify/functions/server/requirements.txt</code></p>
-                <p><strong>Erreur:</strong> {str(e)}</p>
-            </body>
-            </html>
-            '''
+            'body': json.dumps(error_response)
         }
     except Exception as e:
         print(f"❌ Erreur dans le handler: {e}")
@@ -175,13 +172,13 @@ def handler(event, context):
         return {
             'statusCode': 500,
             'headers': {
-                'Content-Type': 'application/json',
+                'Content-Type': 'application/json; charset=utf-8',
                 'Access-Control-Allow-Origin': '*',
             },
             'body': json.dumps({
                 'error': str(e),
                 'type': type(e).__name__,
                 'path': path if 'path' in locals() else 'unknown',
-                'traceback': error_trace
+                'traceback': error_trace[:500]  # Limiter la taille
             })
         }

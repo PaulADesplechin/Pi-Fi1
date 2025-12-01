@@ -2,9 +2,9 @@
 # Site: https://pietfi1.netlify.app
 
 [build]
-  # Pas de build nécessaire - les fichiers sont déjà dans le repo
-  command = "echo 'Build terminé'"
-  # Répertoire de publication - Netlify servira automatiquement public/index.html
+  # Build command pour installer les dépendances Python
+  command = "python -m pip install --upgrade pip && pip install -r requirements.txt && pip install -r netlify/functions/server/requirements.txt"
+  # Répertoire de publication
   publish = "public"
   
 # IMPORTANT: index.html doit être dans le dossier public/

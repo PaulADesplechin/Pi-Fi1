@@ -1,10 +1,10 @@
 # Netlify Redirects pour π-FI Dashboard
 # IMPORTANT: Ce fichier doit être dans public/ pour être pris en compte
 
-# Fichiers statiques servis directement
+# Fichiers statiques servis directement (priorité haute)
 /static/*  /static/:splat  200
 
-# API vers fonction serverless (IMPORTANT: sans le /api dans la destination)
+# API vers fonction serverless
 /api/*  /.netlify/functions/server/api/:splat  200
 
 # Routes Flask spécifiques
