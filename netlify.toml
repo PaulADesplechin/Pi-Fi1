@@ -2,12 +2,12 @@
 # Site: https://pietfi1.netlify.app
 
 [build]
-  # Commande de build simplifiée - index.html est déjà dans le repo
-  command = "echo 'Build terminé - index.html déjà présent'"
-  # Répertoire de publication
-  publish = "."
+  # Pas de build nécessaire - les fichiers sont déjà dans le repo
+  command = "echo 'Build terminé'"
+  # Répertoire de publication - Netlify servira automatiquement public/index.html
+  publish = "public"
   
-# IMPORTANT: index.html doit être commité dans le repo Git
+# IMPORTANT: index.html doit être dans le dossier public/
 
 [build.environment]
   PYTHON_VERSION = "3.11"
