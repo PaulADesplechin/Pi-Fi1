@@ -1513,50 +1513,7 @@
                         })
                         .catch(err => {
                             console.error('❌ [INLINE] Erreur:', err);
-                            let errorMsg = err.message || 'Erreur inconnue';
-                            let solutionHtml = '';
-                            
-                            // Si c'est une erreur JSON/HTML, afficher le guide Render.com
-                            if (errorMsg.includes('JSON') || errorMsg.includes('HTML') || errorMsg.includes('unexpected character')) {
-                                errorMsg = 'La fonction serverless Netlify retourne du HTML au lieu de JSON';
-                                solutionHtml = `
-                                    <div style="margin-top: 30px; padding: 25px; background: rgba(0, 175, 255, 0.1); border-radius: 12px; border: 2px solid rgba(79, 255, 163, 0.3); max-width: 700px; margin-left: auto; margin-right: auto;">
-                                        <h3 style="color: #4FFFA3; margin-bottom: 15px; font-size: 1.3em;">
-                                            <i class="fas fa-lightbulb"></i> Solution Recommandée : Utilisez Render.com
-                                        </h3>
-                                        <p style="margin-bottom: 20px; color: var(--text-secondary); line-height: 1.6;">
-                                            Netlify Functions pour Flask est complexe et peut avoir des limitations. 
-                                            <strong style="color: #4FFFA3;">Render.com est spécialement conçu pour Flask</strong> et beaucoup plus simple.
-                                        </p>
-                                        <div style="background: rgba(2, 9, 21, 0.8); padding: 20px; border-radius: 8px; margin-bottom: 15px;">
-                                            <h4 style="color: #00AFFF; margin-bottom: 15px;">📋 Étapes de Déploiement (5 minutes) :</h4>
-                                            <ol style="text-align: left; color: var(--text-secondary); line-height: 2; padding-left: 25px;">
-                                                <li>Allez sur <a href="https://render.com" target="_blank" style="color: #4FFFA3; text-decoration: underline;">render.com</a> et créez un compte (gratuit)</li>
-                                                <li>Cliquez sur <strong style="color: #F5F9FF;">"New +"</strong> → <strong style="color: #F5F9FF;">"Web Service"</strong></li>
-                                                <li>Connectez votre repo GitHub : <code style="background: rgba(0, 175, 255, 0.2); padding: 2px 6px; border-radius: 4px;">PaulADesplechin/Pi-Fi1</code></li>
-                                                <li>Render détectera automatiquement <code style="background: rgba(0, 175, 255, 0.2); padding: 2px 6px; border-radius: 4px;">render.yaml</code></li>
-                                                <li>Ajoutez la variable : <code style="background: rgba(0, 175, 255, 0.2); padding: 2px 6px; border-radius: 4px;">TELEGRAM_BOT_TOKEN</code> = votre token</li>
-                                                <li>Cliquez sur <strong style="color: #F5F9FF;">"Create Web Service"</strong></li>
-                                                <li>Attendez 2-3 minutes - votre site sera fonctionnel !</li>
-                                            </ol>
-                                        </div>
-                                        <div style="background: rgba(79, 255, 163, 0.1); padding: 15px; border-radius: 8px; border-left: 4px solid #4FFFA3;">
-                                            <p style="margin: 0; color: #4FFFA3;">
-                                                <strong>✅ Avantages Render.com :</strong> Support natif Flask • Configuration automatique • Déploiement automatique • Gratuit pour commencer
-                                            </p>
-                                        </div>
-                                    </div>
-                                `;
-                            }
-                            
-                            container.innerHTML = `
-                                <div style="text-align:center;color:var(--danger);padding:40px;">
-                                    <i class="fas fa-exclamation-circle" style="font-size: 3em; margin-bottom: 20px;"></i>
-                                    <h3 style="color: #ef4444; margin-bottom: 10px;">Erreur: ${errorMsg}</h3>
-                                    <p style="color: var(--text-secondary); margin-bottom: 20px;">Impossible de charger les données crypto.</p>
-                                    ${solutionHtml}
-                                </div>
-                            `;
+                            container.innerHTML = '<div style="text-align:center;color:var(--danger);padding:40px;"><i class="fas fa-exclamation-circle"></i> Erreur: ' + err.message + '</div>';
                         });
                 })();
             </script>
