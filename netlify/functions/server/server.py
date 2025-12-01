@@ -48,7 +48,17 @@ def handler(event, context):
         
         # Adapter l'événement Netlify au format Lambda pour serverless-wsgi
         http_method = event.get('httpMethod') or event.get('method', 'GET')
-        path = event.get('path') or event.get('rawPath', '/')
+        raw_path = event.get('path') or event.get('rawPath', '/')
+        
+        # Netlify ajoute le préfixe de la fonction dans le path, le retirer
+        path = raw_path
+        if path.startswith('/.netlify/functions/server'):
+            path = path.replace('/.netlify/functions/server', '', 1)
+        if not path:
+            path = '/'
+        if not path.startswith('/'):
+            path = '/' + path
+        
         query_params = event.get('queryStringParameters') or event.get('query', {}) or {}
         headers = event.get('headers', {}) or {}
         body = event.get('body', '') or ''
@@ -71,7 +81,7 @@ def handler(event, context):
             }
         }
         
-        print(f"🔄 Appel de handle_request avec path: {path}")
+        print(f"🔄 Appel de handle_request avec path: {path} (raw: {raw_path})")
         
         # Appeler serverless-wsgi
         response = handle_request(app, lambda_event, context)

@@ -3,8 +3,8 @@
 
 [build]
   # Commande de build pour Netlify
-  command = "python -m pip install --upgrade pip && pip install -r requirements.txt"
-  # Répertoire de publication (Netlify servira les fichiers statiques depuis la racine)
+  command = "python -m pip install --upgrade pip && pip install -r requirements.txt && python extract_html.py"
+  # Répertoire de publication (Netlify servira index.html directement)
   publish = "."
 
 [build.environment]
