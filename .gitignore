@@ -37,3 +37,6 @@ wheels/
 .DS_Store
 Thumbs.db
 
+# Submodules (si nécessaire)
+projettelegram/
+
