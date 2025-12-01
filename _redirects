@@ -1,17 +1,17 @@
 # Netlify Redirects pour π-FI Dashboard
-# IMPORTANT: Netlify traite les règles de haut en bas, la première correspondance gagne
+# Netlify traite les règles de haut en bas
 
-# 1. Fichiers statiques servis directement (priorité haute)
+# Fichiers statiques
 /static/*  /static/:splat  200
 
-# 2. Routes API vers la fonction serverless Flask
+# API vers fonction serverless
 /api/*  /.netlify/functions/server/api/:splat  200
 
-# 3. Routes Flask spécifiques
+# Routes Flask
 /logo  /.netlify/functions/server/logo  200
 /dashboard  /.netlify/functions/server/dashboard  200
 /health  /.netlify/functions/server/health  200
 
-# 4. Toutes les autres routes vers index.html (doit être en dernier)
+# Toutes les autres routes vers index.html
 /*  /index.html  200
 

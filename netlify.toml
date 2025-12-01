@@ -2,12 +2,12 @@
 # Site: https://pietfi1.netlify.app
 
 [build]
-  # Commande de build pour Netlify
-  command = "python -m pip install --upgrade pip && pip install -r requirements.txt && python extract_html.py && echo 'Build terminé'"
-  # Répertoire de publication - Netlify servira index.html automatiquement
+  # Commande de build simplifiée - index.html est déjà dans le repo
+  command = "echo 'Build terminé - index.html déjà présent'"
+  # Répertoire de publication
   publish = "."
   
-# IMPORTANT: Assurez-vous que index.html existe à la racine après le build
+# IMPORTANT: index.html doit être commité dans le repo Git
 
 [build.environment]
   PYTHON_VERSION = "3.11"
