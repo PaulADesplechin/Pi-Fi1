@@ -13,23 +13,8 @@
   PYTHON_VERSION = "3.11"
   NODE_VERSION = "18"
 
-# Redirections pour Flask via Netlify Functions
-# IMPORTANT: Les fichiers statiques doivent être servis AVANT la fonction
-[[redirects]]
-  from = "/static/*"
-  to = "/static/:splat"
-  status = 200
-
-[[redirects]]
-  from = "/*"
-  to = "/.netlify/functions/server"
-  status = 200
-
-# Redirection pour les assets statiques
-[[redirects]]
-  from = "/static/*"
-  to = "/static/:splat"
-  status = 200
+# Les redirections sont gérées par le fichier _redirects (priorité)
+# Ce fichier netlify.toml configure uniquement le build et les headers
 
 # Headers de sécurité
 [[headers]]
