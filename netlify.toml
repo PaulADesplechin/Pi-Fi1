@@ -2,9 +2,9 @@
 # Site: https://pietfi1.netlify.app
 
 [build]
-  # Commande de build
-  command = "pip install -r requirements.txt && mkdir -p netlify/functions"
-  # Répertoire de publication
+  # Commande de build pour Netlify
+  command = "python -m pip install --upgrade pip && pip install -r requirements.txt"
+  # Répertoire de publication (Netlify servira les fichiers statiques depuis la racine)
   publish = "."
 
 [build.environment]
@@ -49,5 +49,5 @@
 # Configuration des fonctions serverless
 [functions]
   directory = "netlify/functions"
-  node_bundler = "esbuild"
+  # Python functions - pas besoin de bundler Node.js
 
