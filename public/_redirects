@@ -4,7 +4,8 @@
 # Fichiers statiques servis directement (priorité haute)
 /static/*  /static/:splat  200
 
-# API vers fonction serverless
+# API vers fonction serverless (essayer d'abord la fonction simplifiée pour /api/prices)
+/api/prices  /.netlify/functions/api-prices  200
 /api/*  /.netlify/functions/server/api/:splat  200
 
 # Routes Flask spécifiques

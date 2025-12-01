@@ -133,7 +133,7 @@ def handler(event, context):
         if isinstance(body_content, str) and path.startswith('/api/'):
             # Vérifier si c'est du HTML
             body_stripped = body_content.strip()
-            if body_stripped.startswith('<!DOCTYPE') or body_stripped.startswith('<html') or '<body' in body_stripped:
+            if body_stripped.startswith('<!DOCTYPE') or body_stripped.startswith('<html') or '<body' in body_stripped or body_stripped.startswith('<'):
                 print(f"⚠️ ATTENTION: La route API retourne du HTML au lieu de JSON!")
                 print(f"⚠️ Body preview: {body_stripped[:300]}")
                 # Retourner une erreur JSON valide
@@ -141,8 +141,9 @@ def handler(event, context):
                     'error': 'La fonction serverless a retourné du HTML au lieu de JSON',
                     'path': path,
                     'statusCode': response.get('statusCode', 500),
-                    'message': 'Utilisez Render.com pour une meilleure compatibilité Flask'
-                })
+                    'message': 'Utilisez Render.com pour une meilleure compatibilité Flask',
+                    'solution': 'https://render.com - Déploiement Flask en 5 minutes'
+                }, ensure_ascii=False)
                 response['headers']['Content-Type'] = 'application/json; charset=utf-8'
                 response['statusCode'] = 500
         
