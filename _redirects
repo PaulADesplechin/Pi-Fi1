@@ -1,12 +1,17 @@
 # Netlify Redirects pour π-FI Dashboard
-# IMPORTANT: L'ordre des redirections est crucial
-# Les fichiers statiques et index.html sont servis directement
-# Seules les routes API sont redirigées vers la fonction serverless
+# IMPORTANT: L'ordre est crucial - Netlify traite les règles de haut en bas
 
-/static/*                    /static/:splat  200
-/api/*                      /.netlify/functions/server/api/:splat  200
-/logo                        /.netlify/functions/server/logo  200
-/dashboard                   /.netlify/functions/server/dashboard  200
-/health                      /.netlify/functions/server/health  200
-/*                           /index.html  200
+# Fichiers statiques servis directement
+/static/*  /static/:splat  200
+
+# Routes API vers la fonction serverless
+/api/*  /.netlify/functions/server/api/:splat  200
+
+# Autres routes Flask vers la fonction serverless
+/logo  /.netlify/functions/server/logo  200
+/dashboard  /.netlify/functions/server/dashboard  200
+/health  /.netlify/functions/server/health  200
+
+# Toutes les autres routes vers index.html (SPA routing)
+/*  /index.html  200
 
