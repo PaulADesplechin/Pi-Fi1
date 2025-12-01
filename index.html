@@ -1407,7 +1407,7 @@
                     }
                     
                     console.log('📡 [INLINE] Envoi de la requête à /api/prices...');
-                    fetch('/api/prices?t=' + Date.now())
+                    fetch('/.netlify/functions/server/api/prices?t=' + Date.now())
                         .then(response => {
                             console.log('📡 [INLINE] Réponse reçue:', response.status);
                             if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -2002,7 +2002,7 @@
                     loadPricesDirectly();
                 } else {
                     // Dernier recours: fetch direct
-                    fetch('/api/prices?t=' + Date.now())
+                    fetch('/.netlify/functions/server/api/prices?t=' + Date.now())
                         .then(response => response.json())
                         .then(data => {
                             if (data.prices && typeof updatePricesList === 'function') {
@@ -3132,7 +3132,7 @@
             
             try {
                 console.log('🔄 Actualisation des prix...');
-                const response = await fetch('/api/prices?t=' + Date.now());
+                const response = await fetch('/.netlify/functions/server/api/prices?t=' + Date.now());
                 if (!response.ok) {
                     throw new Error('HTTP error! status: ' + response.status);
                 }
@@ -3177,7 +3177,7 @@
             }
             
             console.log('📡 [loadPricesDirectly] Envoi de la requête à /api/prices...');
-            fetch('/api/prices?t=' + Date.now())
+            fetch('/.netlify/functions/server/api/prices?t=' + Date.now())
                 .then(response => {
                     console.log('📡 [loadPricesDirectly] Réponse reçue:', response.status, response.statusText);
                     if (!response.ok) {
@@ -3239,7 +3239,7 @@
                 container.innerHTML = '<div style="text-align: center; color: var(--danger); padding: 40px;"><i class="fas fa-exclamation-circle"></i> Le chargement prend trop de temps.<br><button onclick="forceLoadPrices()" style="margin-top: 10px; padding: 8px 16px; background: var(--accent-primary); color: var(--bg-primary); border: none; border-radius: 8px; cursor: pointer;">Réessayer</button></div>';
             }, 10000); // 10 secondes max
             
-            fetch('/api/prices?t=' + Date.now())
+            fetch('/.netlify/functions/server/api/prices?t=' + Date.now())
                 .then(response => {
                     clearTimeout(timeoutId);
                     console.log('📡 Réponse reçue:', response.status);
@@ -3383,7 +3383,7 @@
             const statusDot = document.getElementById('connection-status');
             const connectionText = document.getElementById('connection-text');
             
-            fetch('/api/prices?t=' + Date.now())
+            fetch('/.netlify/functions/server/api/prices?t=' + Date.now())
                 .then(response => {
                     if (response.ok) {
                         if (statusDot) {
@@ -4037,8 +4037,8 @@
             if (Notification.permission === 'granted') {
                 new Notification(title, {
                     body: body,
-                    icon: '/logo',
-                    badge: '/logo'
+                    icon: '/.netlify/functions/server/logo',
+                    badge: '/.netlify/functions/server/logo'
                 });
             }
         }
