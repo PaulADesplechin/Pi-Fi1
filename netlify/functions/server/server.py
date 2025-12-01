@@ -104,16 +104,35 @@ def handler(event, context):
         response = handle_request(app, lambda_event, context)
         
         print(f"✅ Réponse reçue: statusCode={response.get('statusCode', 'N/A')}")
+        print(f"✅ Headers: {response.get('headers', {})}")
+        print(f"✅ Body type: {type(response.get('body', ''))}")
         
-        # S'assurer que les headers CORS sont présents pour les API
+        # S'assurer que les headers sont présents
         if 'headers' not in response:
             response['headers'] = {}
         
-        # Ajouter CORS si nécessaire
+        # Ajouter CORS pour toutes les routes API
         if path.startswith('/api/'):
             response['headers']['Access-Control-Allow-Origin'] = '*'
             response['headers']['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
             response['headers']['Access-Control-Allow-Headers'] = 'Content-Type'
+            # S'assurer que le Content-Type est application/json pour les API
+            if 'Content-Type' not in response['headers']:
+                response['headers']['Content-Type'] = 'application/json; charset=utf-8'
+        
+        # Vérifier si le body contient du HTML au lieu de JSON (erreur)
+        body = response.get('body', '')
+        if isinstance(body, str) and path.startswith('/api/') and body.strip().startswith('<!DOCTYPE'):
+            print(f"⚠️ ATTENTION: La route API retourne du HTML au lieu de JSON!")
+            print(f"⚠️ Body preview: {body[:200]}")
+            # Retourner une erreur JSON valide
+            response['body'] = json.dumps({
+                'error': 'La fonction serverless a retourné du HTML au lieu de JSON',
+                'path': path,
+                'statusCode': response.get('statusCode', 500)
+            })
+            response['headers']['Content-Type'] = 'application/json; charset=utf-8'
+            response['statusCode'] = 500
         
         # Retourner la réponse
         return response
