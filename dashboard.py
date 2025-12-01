@@ -1,17 +1,31 @@
 """
-Dashboard Web pour le Bot Crypto Pro
-Interface web pour visualiser les données crypto
+π-FI | AI Powered Finance & Intelligence
+Dashboard Web - Interface web pour visualiser les données crypto
 """
-from flask import Flask, render_template_string, jsonify
+from flask import Flask, render_template_string, jsonify, send_file
 from datetime import datetime
 import requests
 import os
+import concurrent.futures
 from shared_data import shared_data, get_stats
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', static_url_path='/static')
+
+# Route pour servir les fichiers static avec cache busting
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    """Route pour servir les fichiers static"""
+    from flask import send_from_directory
+    import os
+    static_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
+    return send_from_directory(static_folder, filename)
 
 COINGECKO_API_URL = 'https://api.coingecko.com/api/v3'
 BINANCE_API_URL = 'https://api.binance.com/api/v3'
+
+# Cache simple pour les prix (5 secondes)
+_price_cache = {'data': [], 'timestamp': 0}
+CACHE_DURATION = 5
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -19,11 +33,17 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bot Crypto Pro - Dashboard</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>π-FI | AI Powered Finance & Intelligence - Dashboard</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta http-equiv="Last-Modified" content="0">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js?v=2"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         
         * { 
             margin: 0; 
@@ -32,31 +52,175 @@ HTML_TEMPLATE = """
         }
         
         :root {
-            --bg-primary: #0a0e27;
-            --bg-secondary: #141b2d;
-            --bg-card: #1a2332;
-            --accent-primary: #667eea;
-            --accent-secondary: #764ba2;
-            --text-primary: #ffffff;
-            --text-secondary: #a0aec0;
-            --success: #10b981;
+            /* Couleurs principales π-FI */
+            --white-cold: #F5F9FF;
+            --blue-neon: #00AFFF;
+            --blue-night: #06101C;
+            --black-blue-deep: #020915;
+            --grey-tech: #5A6C81;
+            
+            /* Couleurs secondaires π-FI */
+            --scientific-green: #4FFFA3;
+            --steel-blue: #13344F;
+            --arctic-blue: #A1E3FF;
+            
+            /* Usage sémantique */
+            --bg-primary: #020915;
+            --bg-secondary: #06101C;
+            --bg-card: #06101C;
+            --bg-ui: #13344F;
+            --accent-primary: #00AFFF;
+            --accent-secondary: #4FFFA3;
+            --text-primary: #F5F9FF;
+            --text-secondary: #5A6C81;
+            --border-color: #A1E3FF;
+            
+            /* États */
+            --success: #4FFFA3;
             --danger: #ef4444;
             --warning: #f59e0b;
-            --gradient-1: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --gradient-2: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            --gradient-3: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            
+            /* Dégradés π-FI */
+            --gradient-main: linear-gradient(90deg, #00AFFF 0%, #4FFFA3 100%);
+            --gradient-dark: linear-gradient(135deg, #020915 0%, #06101C 50%, #020915 100%);
+            --gradient-card: linear-gradient(135deg, #06101C 0%, #13344F 100%);
+        }
+        
+        /* Thème clair */
+        [data-theme="light"] {
+            --bg-primary: #F5F9FF;
+            --bg-secondary: #E8F4FF;
+            --bg-card: #FFFFFF;
+            --bg-ui: #E0E8F0;
+            --text-primary: #020915;
+            --text-secondary: #5A6C81;
+            --border-color: #A1E3FF;
+        }
+        
+        [data-theme="light"] body {
+            background: #F5F9FF !important;
+            background-image: 
+                linear-gradient(135deg, #F5F9FF 0%, #E8F4FF 50%, #F5F9FF 100%),
+                radial-gradient(at 0% 0%, rgba(0, 175, 255, 0.05) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(79, 255, 163, 0.04) 0px, transparent 50%) !important;
+            color: #020915 !important;
+        }
+        
+        [data-theme="light"] .price-item {
+            background: rgba(255, 255, 255, 0.8) !important;
+            border-color: rgba(161, 227, 255, 0.3) !important;
+            color: #020915 !important;
+        }
+        
+        [data-theme="light"] .stat-card {
+            background: rgba(255, 255, 255, 0.9) !important;
+            border-color: rgba(161, 227, 255, 0.3) !important;
+        }
+        
+        [data-theme="light"] .trading-modal-content {
+            background: #FFFFFF !important;
+            color: #020915 !important;
+        }
+        
+        /* Responsive amélioré */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .prices-grid {
+                grid-template-columns: 1fr !important;
+            }
+            
+            .user-tools {
+                flex-direction: column;
+                align-items: stretch !important;
+            }
+            
+            .user-tools > div {
+                flex-direction: column;
+            }
+            
+            .tool-btn {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .stats {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .stats {
+                grid-template-columns: 1fr !important;
+            }
+            
+            .header h1 {
+                font-size: 1.5em !important;
+            }
         }
         
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--bg-primary);
+            background: #020915 !important;
             background-image: 
-                radial-gradient(at 0% 0%, rgba(102, 126, 234, 0.15) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(118, 75, 162, 0.15) 0px, transparent 50%);
+                linear-gradient(135deg, #020915 0%, #06101C 50%, #020915 100%),
+                radial-gradient(at 0% 0%, rgba(0, 175, 255, 0.1) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(79, 255, 163, 0.08) 0px, transparent 50%),
+                radial-gradient(at 50% 50%, rgba(0, 175, 255, 0.03) 0px, transparent 50%) !important;
             min-height: 100vh;
             padding: 20px;
-            color: var(--text-primary);
+            color: #F5F9FF !important;
             animation: fadeIn 0.5s ease-in;
+            position: relative;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                /* Grille mathématique */
+                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 175, 255, 0.03) 2px, rgba(0, 175, 255, 0.03) 4px),
+                repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(79, 255, 163, 0.02) 2px, rgba(79, 255, 163, 0.02) 4px),
+                /* Lignes de circuit imprimé */
+                linear-gradient(45deg, transparent 48%, rgba(0, 175, 255, 0.02) 49%, rgba(0, 175, 255, 0.02) 51%, transparent 52%),
+                linear-gradient(-45deg, transparent 48%, rgba(79, 255, 163, 0.015) 49%, rgba(79, 255, 163, 0.015) 51%, transparent 52%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        /* Symboles π en watermark */
+        body::after {
+            content: 'π';
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Montserrat', sans-serif;
+            font-size: 30vw;
+            font-weight: 900;
+            color: rgba(0, 175, 255, 0.02);
+            pointer-events: none;
+            z-index: 0;
+            user-select: none;
+            animation: watermarkFloat 20s ease-in-out infinite;
+        }
+        
+        @keyframes watermarkFloat {
+            0%, 100% { opacity: 0.02; transform: translate(-50%, -50%) scale(1); }
+            50% { opacity: 0.03; transform: translate(-50%, -50%) scale(1.05); }
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
         }
         
         @keyframes fadeIn {
@@ -76,8 +240,23 @@ HTML_TEMPLATE = """
         }
         
         @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
+            0%, 100% { 
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% { 
+                transform: scale(1.1);
+                opacity: 0.8;
+            }
+        }
+        
+        @keyframes glow {
+            0%, 100% {
+                text-shadow: 0 0 20px rgba(0, 175, 255, 0.5), 0 0 40px rgba(79, 255, 163, 0.3);
+            }
+            50% {
+                text-shadow: 0 0 30px rgba(0, 175, 255, 0.8), 0 0 60px rgba(79, 255, 163, 0.5);
+            }
         }
         
         @keyframes shimmer {
@@ -85,53 +264,179 @@ HTML_TEMPLATE = """
             100% { background-position: 1000px 0; }
         }
         
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
         
         .header {
             text-align: center;
-            margin-bottom: 40px;
-            animation: slideUp 0.6s ease-out;
+            margin-bottom: 50px;
+            animation: slideUp 0.8s ease-out;
+            padding: 30px 20px;
+            background: radial-gradient(circle at center, rgba(0, 175, 255, 0.05) 0%, transparent 70%) !important;
+            border-radius: 12px;
+            border: 1px solid rgba(161, 227, 255, 0.1) !important;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
         }
         
-        .header h1 { 
-            font-size: 3em; 
-            margin-bottom: 10px;
-            background: var(--gradient-1);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-weight: 800;
-            letter-spacing: -1px;
+        .logo-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            padding: 20px 0;
+        }
+        
+        .logo-img {
+            max-width: 280px;
+            width: 100%;
+            height: auto;
+            filter: drop-shadow(0 0 25px rgba(0, 175, 255, 0.7)) 
+                    drop-shadow(0 0 50px rgba(79, 255, 163, 0.4))
+                    drop-shadow(0 0 75px rgba(0, 175, 255, 0.2));
+            animation: logoGlow 4s ease-in-out infinite;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        
+        .logo-container {
+            min-height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 0;
+        }
+        
+        .logo-img:hover {
+            filter: drop-shadow(0 0 35px rgba(0, 175, 255, 0.9)) 
+                    drop-shadow(0 0 70px rgba(79, 255, 163, 0.6))
+                    drop-shadow(0 0 100px rgba(0, 175, 255, 0.3));
+            transform: scale(1.03);
+        }
+        
+        @keyframes logoGlow {
+            0%, 100% {
+                filter: drop-shadow(0 0 25px rgba(0, 175, 255, 0.7)) 
+                        drop-shadow(0 0 50px rgba(79, 255, 163, 0.4))
+                        drop-shadow(0 0 75px rgba(0, 175, 255, 0.2));
+            }
+            50% {
+                filter: drop-shadow(0 0 35px rgba(0, 175, 255, 0.9)) 
+                        drop-shadow(0 0 70px rgba(79, 255, 163, 0.6))
+                        drop-shadow(0 0 100px rgba(0, 175, 255, 0.4));
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .logo-img {
+                max-width: 280px;
+            }
         }
         
         .header p {
-            color: var(--text-secondary);
+            color: #5A6C81 !important;
             font-size: 1.1em;
-            font-weight: 300;
+            font-weight: 400;
+            margin-top: 15px;
+            letter-spacing: 0.5px;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .header .tagline {
+            color: #5A6C81 !important;
+            font-size: 0.95em;
+            font-style: italic;
+            margin-top: 12px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-weight: 500;
+            opacity: 0.9;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .header .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #4FFFA3 !important;
+            border-radius: 50%;
+            margin-right: 10px;
+            animation: pulse 2s ease-in-out infinite;
+            box-shadow: 0 0 15px #4FFFA3, 0 0 30px rgba(79, 255, 163, 0.3);
         }
         
         .stats {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 25px;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
             margin-bottom: 30px;
         }
         
         .stat-card {
-            background: var(--bg-card);
-            border-radius: 20px;
+            background: linear-gradient(135deg, rgba(0, 175, 255, 0.08) 0%, rgba(79, 255, 163, 0.05) 100%);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(161, 227, 255, 0.2);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            animation: slideUp 0.6s ease-out;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 175, 255, 0.3);
+            border-color: rgba(161, 227, 255, 0.4);
+        }
+        
+        .stat-card .icon {
+            font-size: 2em;
+            color: #00AFFF;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .stat-card h3 {
+            font-size: 0.85em;
+            color: #5A6C81;
+            margin: 0 0 10px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+        
+        .stat-card .value {
+            font-size: 1.8em;
+            font-weight: 800;
+            color: #F5F9FF;
+            font-family: 'Montserrat', sans-serif;
+            text-shadow: 0 0 10px rgba(0, 175, 255, 0.5);
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: #06101C !important;
+            border-radius: 12px;
             padding: 30px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
             text-align: center;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(161, 227, 255, 0.2) !important;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
             animation: slideUp 0.6s ease-out;
             animation-fill-mode: both;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
         }
         
         .stat-card:nth-child(1) { animation-delay: 0.1s; }
@@ -152,8 +457,11 @@ HTML_TEMPLATE = """
         
         .stat-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 12px 40px rgba(102, 126, 234, 0.3);
-            border-color: rgba(102, 126, 234, 0.3);
+            box-shadow: 0 12px 40px rgba(0, 175, 255, 0.5), 0 0 30px rgba(0, 175, 255, 0.3);
+            border-color: var(--arctic-blue);
+            background: linear-gradient(135deg, rgba(19, 52, 79, 0.95) 0%, rgba(6, 16, 28, 0.9) 100%);
+            /* Lueur subtile au hover */
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8), 0 0 40px rgba(0, 175, 255, 0.4), inset 0 0 20px rgba(161, 227, 255, 0.05);
         }
         
         .stat-card:hover::before {
@@ -163,27 +471,39 @@ HTML_TEMPLATE = """
         .stat-card .icon {
             font-size: 2.5em;
             margin-bottom: 15px;
-            background: var(--gradient-1);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: #00AFFF !important;
+            text-shadow: 0 0 20px rgba(0, 175, 255, 0.6);
+            filter: drop-shadow(0 0 8px rgba(0, 175, 255, 0.4));
+        }
+        
+        .stat-card:hover .icon {
+            color: #A1E3FF !important;
+            text-shadow: 0 0 25px rgba(161, 227, 255, 0.8);
         }
         
         .stat-card h3 {
-            color: var(--text-secondary);
+            color: #5A6C81 !important;
             font-size: 0.85em;
             text-transform: uppercase;
             margin-bottom: 15px;
             letter-spacing: 1px;
             font-weight: 600;
+            font-family: 'Inter', sans-serif;
         }
         
         .stat-card .value {
             font-size: 3em;
             font-weight: 800;
-            color: var(--text-primary);
+            color: #F5F9FF !important;
             transition: all 0.3s ease;
             font-variant-numeric: tabular-nums;
+            text-shadow: 0 2px 10px rgba(0, 175, 255, 0.3);
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+        }
+        
+        .stat-card:hover .value {
+            color: #A1E3FF !important;
+            text-shadow: 0 2px 15px rgba(161, 227, 255, 0.5);
         }
         
         .stat-card .value.updating {
@@ -191,79 +511,174 @@ HTML_TEMPLATE = """
         }
         
         .chart-container {
-            background: var(--bg-card);
-            border-radius: 20px;
+            background: #06101C !important;
+            border-radius: 12px;
             padding: 30px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
             margin-bottom: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(161, 227, 255, 0.2) !important;
             animation: slideUp 0.8s ease-out;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
         }
         
         .chart-container h2 {
             margin-bottom: 25px;
             font-size: 1.5em;
             font-weight: 700;
-            color: var(--text-primary);
+            color: #F5F9FF !important;
             display: flex;
             align-items: center;
             gap: 10px;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            text-shadow: 0 0 20px rgba(0, 175, 255, 0.3);
+        }
+        
+        .chart-container h2 i {
+            color: #00AFFF !important;
+            text-shadow: 0 0 10px rgba(0, 175, 255, 0.5);
         }
         
         .price-list {
-            background: var(--bg-card);
-            border-radius: 20px;
+            background: #06101C !important;
+            border-radius: 12px;
             padding: 30px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(161, 227, 255, 0.2) !important;
             animation: slideUp 1s ease-out;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
         }
         
         .price-list h2 {
             margin-bottom: 25px;
             font-size: 1.5em;
             font-weight: 700;
-            color: var(--text-primary);
+            color: #F5F9FF !important;
             display: flex;
             align-items: center;
             gap: 10px;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            font-weight: 700;
+            text-shadow: 0 0 20px rgba(0, 175, 255, 0.3);
+        }
+        
+        .price-list h2 i {
+            color: #00AFFF !important;
+            text-shadow: 0 0 10px rgba(0, 175, 255, 0.5);
+        }
+        
+        .prices-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
         }
         
         .price-item {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
             padding: 20px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(0, 175, 255, 0.03);
+            border: 1px solid rgba(161, 227, 255, 0.2);
             transition: all 0.3s ease;
             border-radius: 12px;
-            margin-bottom: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .price-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--gradient-main);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+            box-shadow: 0 0 10px rgba(0, 175, 255, 0.5);
         }
         
         .price-item:hover {
-            background: rgba(102, 126, 234, 0.1);
-            transform: translateX(5px);
+            background: rgba(0, 175, 255, 0.08);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0, 175, 255, 0.4), 0 0 20px rgba(0, 175, 255, 0.2);
+            border-color: var(--arctic-blue);
+            box-shadow: 0 8px 25px rgba(0, 175, 255, 0.4), 0 0 30px rgba(0, 175, 255, 0.3), inset 0 0 15px rgba(161, 227, 255, 0.05);
         }
         
-        .price-item:last-child { border-bottom: none; }
+        .price-item:hover::before {
+            transform: scaleX(1);
+        }
+        
+        .price-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
         
         .price-item .symbol {
             font-weight: 700;
-            font-size: 1.3em;
-            color: var(--text-primary);
+            font-size: 1.4em;
+            color: var(--white-cold);
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         
         .price-item .name {
-            font-size: 0.9em;
-            color: var(--text-secondary);
+            font-size: 0.85em;
+            color: var(--grey-tech);
             margin-top: 4px;
         }
         
         .price-item .price {
-            font-size: 1.2em;
+            font-size: 1.5em;
+            font-weight: 700;
+            color: var(--white-cold);
+            margin-bottom: 8px;
+        }
+        
+        .top-mover-card {
+            background: rgba(0, 175, 255, 0.03);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(161, 227, 255, 0.2);
+        }
+        
+        .top-mover-card h3 {
+            font-size: 1em;
+            color: var(--grey-tech);
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
             font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 5px;
+        }
+        
+        .mover-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(161, 227, 255, 0.1);
+        }
+        
+        .mover-item:last-child {
+            border-bottom: none;
+        }
+        
+        .mover-item .symbol {
+            font-weight: 600;
+            color: var(--white-cold);
+        }
+        
+        .mover-item .change {
+            font-weight: 700;
+            font-size: 1.1em;
         }
         
         .change {
@@ -275,9 +690,9 @@ HTML_TEMPLATE = """
         }
         
         .change.positive { 
-            background: rgba(16, 185, 129, 0.2);
-            color: var(--success);
-            border: 1px solid rgba(16, 185, 129, 0.3);
+            background: rgba(79, 255, 163, 0.15);
+            color: var(--scientific-green);
+            border: 1px solid rgba(79, 255, 163, 0.3);
         }
         
         .change.negative { 
@@ -287,8 +702,8 @@ HTML_TEMPLATE = """
         }
         
         .refresh-btn {
-            background: var(--gradient-1);
-            color: white;
+            background: #00AFFF !important;
+            color: #020915 !important;
             border: none;
             padding: 12px 24px;
             border-radius: 12px;
@@ -297,12 +712,16 @@ HTML_TEMPLATE = """
             font-weight: 600;
             margin: 10px 0 20px 0;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 4px 15px rgba(0, 175, 255, 0.5);
+            font-family: 'Inter', sans-serif;
         }
         
         .refresh-btn:hover { 
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+            box-shadow: 0 6px 20px rgba(0, 175, 255, 0.7), 0 0 30px rgba(0, 175, 255, 0.5);
+            background: #A1E3FF !important;
+            color: #020915 !important;
+            border-color: #00AFFF;
         }
         
         .refresh-btn:active {
@@ -334,122 +753,1361 @@ HTML_TEMPLATE = """
             width: 10px;
             height: 10px;
             border-radius: 50%;
-            background: var(--success);
+            background: var(--scientific-green);
             margin-right: 8px;
             animation: pulse 2s ease-in-out infinite;
+            box-shadow: 0 0 8px var(--scientific-green);
         }
         
         .last-update {
             text-align: center;
-            color: var(--text-secondary);
+            color: var(--grey-tech);
             font-size: 0.85em;
             margin-top: 20px;
             padding-top: 20px;
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            border-top: 1px solid rgba(161, 227, 255, 0.15);
+        }
+        
+        /* Modal Trading */
+        .trading-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .trading-modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .trading-modal-content {
+            background: var(--bg-card);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 900px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9);
+            border: 1px solid rgba(161, 227, 255, 0.3);
+            animation: slideUp 0.4s ease;
+            position: relative;
+        }
+        
+        .trading-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(161, 227, 255, 0.2);
+        }
+        
+        .modal-header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .modal-logo {
+            width: 48px;
+            height: 48px;
+            object-fit: contain;
+            filter: drop-shadow(0 0 10px rgba(0, 175, 255, 0.6));
+            animation: logoGlow 3s ease-in-out infinite;
+        }
+        
+        @keyframes logoGlow {
+            0%, 100% { filter: drop-shadow(0 0 10px rgba(0, 175, 255, 0.6)); }
+            50% { filter: drop-shadow(0 0 20px rgba(79, 255, 163, 0.8)); }
+        }
+        
+        .modal-title-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .trading-modal-header h2 {
+            font-size: 1.8em;
+            color: var(--white-cold);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0;
+            font-weight: 600;
+            font-family: 'Montserrat', sans-serif;
+            text-shadow: 0 0 20px rgba(0, 175, 255, 0.3);
+        }
+        
+        .close-modal {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--danger);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            transition: all 0.3s ease;
+        }
+        
+        .close-modal:hover {
+            background: rgba(239, 68, 68, 0.3);
+            transform: rotate(90deg);
+        }
+        
+        .trading-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        
+        .trading-stat-card {
+            background: rgba(0, 175, 255, 0.03);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(161, 227, 255, 0.2);
+        }
+        
+        .trading-stat-label {
+            font-size: 0.85em;
+            color: var(--grey-tech);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .trading-stat-value {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: var(--white-cold);
+        }
+        
+        .trading-stat-value.positive {
+            color: var(--scientific-green);
+        }
+        
+        .trading-stat-value.negative {
+            color: var(--danger);
+        }
+        
+        .trading-chart-container {
+            background: rgba(0, 175, 255, 0.02);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            height: 400px;
+            min-height: 400px;
+            width: 100%;
+            position: relative;
+            border: 1px solid rgba(161, 227, 255, 0.15);
+        }
+        
+        .trading-chart-container canvas {
+            max-height: 360px !important;
+            height: 360px !important;
+        }
+        
+        .trading-live-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: var(--scientific-green);
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 1.5s ease-in-out infinite;
+            box-shadow: 0 0 10px var(--scientific-green);
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .price-item {
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
+    <!-- Script immédiat pour garantir que les fonctions sont disponibles -->
+    <script>
+        // Définir les fonctions de base IMMÉDIATEMENT
+        console.log('🚀 Initialisation immédiate des fonctions...');
+        
+        // Fonctions de modals de base - VERSION COMPLÈTE ET FONCTIONNELLE
+        window.openConverterModal = function() {
+            console.log('💱 [openConverterModal] Ouverture...');
+            const modal = document.getElementById('converterModal');
+            if (modal) {
+                modal.classList.add('active');
+                setTimeout(() => {
+                    if (typeof populateCryptoSelects === 'function') {
+                        populateCryptoSelects();
+                    } else if (typeof window.populateCryptoSelects === 'function') {
+                        window.populateCryptoSelects();
+                    }
+                    if (typeof calculateConversion === 'function') {
+                        calculateConversion();
+                    } else if (typeof window.calculateConversion === 'function') {
+                        window.calculateConversion();
+                    }
+                }, 200);
+            }
+        };
+        window.closeConverterModal = function() {
+            const modal = document.getElementById('converterModal');
+            if (modal) modal.classList.remove('active');
+        };
+        window.openCalculatorModal = function() {
+            console.log('🧮 [openCalculatorModal] Ouverture...');
+            const modal = document.getElementById('calculatorModal');
+            if (modal) {
+                modal.classList.add('active');
+                setTimeout(() => {
+                    if (typeof populateCryptoSelects === 'function') {
+                        populateCryptoSelects();
+                    } else if (typeof window.populateCryptoSelects === 'function') {
+                        window.populateCryptoSelects();
+                    }
+                    if (typeof updateCalcPrice === 'function') {
+                        updateCalcPrice();
+                    } else if (typeof window.updateCalcPrice === 'function') {
+                        window.updateCalcPrice();
+                    }
+                }, 200);
+            }
+        };
+        window.closeCalculatorModal = function() {
+            const modal = document.getElementById('calculatorModal');
+            if (modal) modal.classList.remove('active');
+        };
+        window.openPortfolioModal = function() {
+            console.log('💼 [openPortfolioModal] Ouverture...');
+            const modal = document.getElementById('portfolioModal');
+            if (modal) {
+                modal.classList.add('active');
+                setTimeout(() => {
+                    if (typeof updatePortfolioDisplay === 'function') {
+                        updatePortfolioDisplay();
+                    } else if (typeof window.updatePortfolioDisplay === 'function') {
+                        window.updatePortfolioDisplay();
+                    }
+                    if (typeof populatePortfolioCryptoSelect === 'function') {
+                        populatePortfolioCryptoSelect();
+                    } else if (typeof window.populatePortfolioCryptoSelect === 'function') {
+                        window.populatePortfolioCryptoSelect();
+                    }
+                }, 200);
+            }
+        };
+        window.closePortfolioModal = function() {
+            const modal = document.getElementById('portfolioModal');
+            if (modal) modal.classList.remove('active');
+        };
+        window.exportData = function(format) {
+            console.log('📥 [exportData] Export format:', format || 'csv');
+            setTimeout(() => {
+                if (typeof window._exportData === 'function') {
+                    window._exportData(format);
+                } else {
+                    console.warn('⚠️ Fonction exportData non encore disponible');
+                }
+            }, 100);
+        };
+        window.refreshPrices = function() {
+            console.log('🔄 [refreshPrices] Actualisation...');
+            setTimeout(() => {
+                if (typeof window._refreshPrices === 'function') {
+                    window._refreshPrices();
+                } else if (typeof refreshPrices === 'function' && refreshPrices !== window.refreshPrices) {
+                    refreshPrices();
+                } else {
+                    console.log('🔄 Rechargement de la page...');
+                    location.reload();
+                }
+            }, 100);
+        };
+        window.openCompareModal = function() {
+            console.log('⚖️ [openCompareModal] Ouverture...');
+            const modal = document.getElementById('compareModal');
+            if (modal) {
+                modal.classList.add('active');
+                // Attendre que le modal soit visible puis remplir les selects
+                setTimeout(() => {
+                    if (typeof populateCryptoSelects === 'function') {
+                        populateCryptoSelects();
+                    } else if (typeof window.populateCryptoSelects === 'function') {
+                        window.populateCryptoSelects();
+                    }
+                    if (typeof updateComparison === 'function') {
+                        updateComparison();
+                    } else if (typeof window.updateComparison === 'function') {
+                        window.updateComparison();
+                    }
+                }, 100);
+            }
+        };
+        window.closeCompareModal = function() {
+            const modal = document.getElementById('compareModal');
+            if (modal) modal.classList.remove('active');
+        };
+        window.showTutorial = function() {
+            const modal = document.getElementById('tutorialModal');
+            if (modal) modal.classList.add('active');
+        };
+        window.closeTutorialModal = function() {
+            const modal = document.getElementById('tutorialModal');
+            if (modal) modal.classList.remove('active');
+        };
+        window.openAlertsModal = function() {
+            console.log('🔔 [openAlertsModal] Ouverture...');
+            const modal = document.getElementById('alertsModal');
+            if (modal) {
+                modal.classList.add('active');
+                // Attendre que le modal soit visible puis remplir les selects
+                setTimeout(() => {
+                    if (typeof populateAlertsSelect === 'function') {
+                        populateAlertsSelect();
+                    } else if (typeof window.populateAlertsSelect === 'function') {
+                        window.populateAlertsSelect();
+                    }
+                    if (typeof displayAlerts === 'function') {
+                        displayAlerts();
+                    } else if (typeof window.displayAlerts === 'function') {
+                        window.displayAlerts();
+                    }
+                }, 100);
+            }
+        };
+        window.closeAlertsModal = function() {
+            const modal = document.getElementById('alertsModal');
+            if (modal) modal.classList.remove('active');
+        };
+        window.closeTradingModal = function() {
+            const modal = document.getElementById('tradingModal');
+            if (modal) modal.classList.remove('active');
+        };
+        window.toggleFavoritesView = function() {
+            const sortSelect = document.getElementById('sort-crypto');
+            if (sortSelect) {
+                sortSelect.value = sortSelect.value === 'favorites' ? 'symbol' : 'favorites';
+                if (typeof window.applyFiltersAndSort === 'function') {
+                    window.applyFiltersAndSort();
+                }
+            }
+        };
+        window.toggleNotifications = function(enabled) {
+            if (enabled && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+        };
+        
+        // Fonction de recherche immédiate - VERSION FONCTIONNELLE COMPLÈTE
+        window.applyFiltersAndSort = function() {
+            console.log('🔍 [applyFiltersAndSort] Appelée depuis script inline');
+            // Appeler la vraie fonction si elle existe
+            if (typeof window._applyFiltersAndSort === 'function') {
+                window._applyFiltersAndSort();
+                return;
+            }
+            // Sinon, attendre un peu et réessayer
+            setTimeout(() => {
+                if (typeof window._applyFiltersAndSort === 'function') {
+                    window._applyFiltersAndSort();
+                } else {
+                    console.warn('⚠️ Fonction _applyFiltersAndSort non encore disponible');
+                }
+            }, 200);
+        };
+        
+        // Fonction pour ouvrir le modal trading
+        window.openTradingModal = function(symbol, name) {
+            console.log('📊 [openTradingModal] Ouverture pour', symbol, name);
+            if (typeof openCryptoModal === 'function') {
+                openCryptoModal(symbol, name);
+            } else {
+                const modal = document.getElementById('tradingModal');
+                if (modal) {
+                    const symbolEl = document.getElementById('modal-symbol');
+                    const nameEl = document.getElementById('modal-name');
+                    if (symbolEl) symbolEl.textContent = symbol;
+                    if (nameEl) nameEl.textContent = name || symbol;
+                    modal.classList.add('active');
+                    console.log('✅ Modal ouvert directement');
+                } else {
+                    console.error('❌ Modal trading non trouvé');
+                }
+            }
+        };
+        
+        window.openCryptoModal = window.openTradingModal; // Alias
+        
+        // Créer des alias globaux pour compatibilité
+        window.openConverterModal = window.openConverterModal || function() {
+            console.log('💱 [openConverterModal] Ouverture...');
+            const modal = document.getElementById('converterModal');
+            if (modal) modal.classList.add('active');
+        };
+        window.openCalculatorModal = window.openCalculatorModal || function() {
+            console.log('🧮 [openCalculatorModal] Ouverture...');
+            const modal = document.getElementById('calculatorModal');
+            if (modal) modal.classList.add('active');
+        };
+        window.openPortfolioModal = window.openPortfolioModal || function() {
+            console.log('💼 [openPortfolioModal] Ouverture...');
+            const modal = document.getElementById('portfolioModal');
+            if (modal) modal.classList.add('active');
+        };
+        window.exportData = window.exportData || function(format) {
+            console.log('📥 [exportData] Export...');
+        };
+        window.refreshPrices = window.refreshPrices || function() {
+            console.log('🔄 [refreshPrices] Actualisation...');
+            location.reload();
+        };
+        
+        // Fonction pour fermer le modal de bienvenue
+        window.closeWelcomeModal = function() {
+            const modal = document.getElementById('welcomeModal');
+            if (modal) {
+                modal.classList.remove('active');
+                const dontShow = document.getElementById('dont-show-welcome');
+                if (dontShow && dontShow.checked) {
+                    localStorage.setItem('pi-fi-welcome-shown', 'true');
+                }
+            }
+        };
+        
+        // Afficher le modal de bienvenue pour les nouveaux utilisateurs
+        (function showWelcomeIfNeeded() {
+            const welcomeShown = localStorage.getItem('pi-fi-welcome-shown');
+            if (!welcomeShown) {
+                setTimeout(() => {
+                    const modal = document.getElementById('welcomeModal');
+                    if (modal) {
+                        modal.classList.add('active');
+                    }
+                }, 1000);
+            }
+        })();
+        
+        // Créer des alias globaux pour compatibilité (sans window.) - VERSION COMPLÈTE
+        openConverterModal = window.openConverterModal;
+        closeConverterModal = window.closeConverterModal;
+        openCalculatorModal = window.openCalculatorModal;
+        closeCalculatorModal = window.closeCalculatorModal;
+        openCompareModal = window.openCompareModal;
+        closeCompareModal = window.closeCompareModal;
+        openAlertsModal = window.openAlertsModal;
+        closeAlertsModal = window.closeAlertsModal;
+        openPortfolioModal = window.openPortfolioModal;
+        closePortfolioModal = window.closePortfolioModal;
+        showTutorial = window.showTutorial;
+        closeTutorialModal = window.closeTutorialModal;
+        toggleFavoritesView = window.toggleFavoritesView;
+        exportData = window.exportData;
+        refreshPrices = window.refreshPrices;
+        openTradingModal = window.openTradingModal;
+        openCryptoModal = window.openCryptoModal;
+        closeTradingModal = window.closeTradingModal;
+        closeWelcomeModal = window.closeWelcomeModal;
+        
+        // Fonction pour fermer le modal de bienvenue
+        window.closeWelcomeModal = function() {
+            const modal = document.getElementById('welcomeModal');
+            if (modal) {
+                modal.classList.remove('active');
+                const dontShow = document.getElementById('dont-show-welcome');
+                if (dontShow && dontShow.checked) {
+                    localStorage.setItem('pi-fi-welcome-shown', 'true');
+                }
+            }
+        };
+        closeWelcomeModal = window.closeWelcomeModal;
+        
+        console.log('✅ Fonctions de base initialisées et alias créés');
+    </script>
+    
+    <!-- Modal de Bienvenue pour Nouveaux Utilisateurs -->
+    <div id="welcomeModal" class="trading-modal" style="z-index: 2000;">
+        <div class="trading-modal-content" style="max-width: 700px; background: linear-gradient(135deg, rgba(0, 175, 255, 0.15) 0%, rgba(79, 255, 163, 0.1) 100%);">
+            <div class="trading-modal-header">
+                <h2 style="color: #F5F9FF; display: flex; align-items: center; gap: 15px;">
+                    <i class="fas fa-rocket" style="color: #4FFFA3;"></i>
+                    Bienvenue sur π-FI Dashboard !
+                </h2>
+                <button class="close-modal" onclick="closeWelcomeModal()">&times;</button>
+            </div>
+            <div style="padding: 30px 0; color: #F5F9FF;">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <div style="font-size: 4em; margin-bottom: 20px;">🚀</div>
+                    <h3 style="font-size: 1.8em; margin-bottom: 15px; color: #4FFFA3;">Votre Dashboard Crypto Professionnel</h3>
+                    <p style="font-size: 1.1em; color: var(--text-secondary); line-height: 1.8;">
+                        Suivez les prix en temps réel, créez des alertes, analysez les tendances et bien plus encore !
+                    </p>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
+                    <div style="text-align: center; padding: 20px; background: rgba(0, 175, 255, 0.1); border-radius: 12px; border: 1px solid rgba(0, 175, 255, 0.2);">
+                        <div style="font-size: 2.5em; margin-bottom: 10px;">🔍</div>
+                        <h4 style="margin-bottom: 8px;">Recherche</h4>
+                        <p style="font-size: 0.9em; color: var(--text-secondary);">Tapez pour trouver instantanément une crypto</p>
+                    </div>
+                    <div style="text-align: center; padding: 20px; background: rgba(79, 255, 163, 0.1); border-radius: 12px; border: 1px solid rgba(79, 255, 163, 0.2);">
+                        <div style="font-size: 2.5em; margin-bottom: 10px;">📈</div>
+                        <h4 style="margin-bottom: 8px;">Graphiques</h4>
+                        <p style="font-size: 0.9em; color: var(--text-secondary);">Cliquez sur une crypto pour voir son graphique</p>
+                    </div>
+                    <div style="text-align: center; padding: 20px; background: rgba(255, 193, 7, 0.1); border-radius: 12px; border: 1px solid rgba(255, 193, 7, 0.2);">
+                        <div style="font-size: 2.5em; margin-bottom: 10px;">🔔</div>
+                        <h4 style="margin-bottom: 8px;">Alertes</h4>
+                        <p style="font-size: 0.9em; color: var(--text-secondary);">Créez des alertes pour ne rien manquer</p>
+                    </div>
+                </div>
+                
+                <div style="background: rgba(0, 175, 255, 0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(0, 175, 255, 0.2); margin-bottom: 20px;">
+                    <h4 style="margin-bottom: 15px; color: #4FFFA3;"><i class="fas fa-lightbulb"></i> Astuces Rapides</h4>
+                    <ul style="list-style: none; padding: 0; margin: 0;">
+                        <li style="margin-bottom: 10px; padding-left: 30px; position: relative;">
+                            <i class="fas fa-check-circle" style="position: absolute; left: 0; color: #4FFFA3;"></i>
+                            <strong>Recherche :</strong> Tapez le nom ou le symbole d'une crypto dans la barre de recherche
+                        </li>
+                        <li style="margin-bottom: 10px; padding-left: 30px; position: relative;">
+                            <i class="fas fa-check-circle" style="position: absolute; left: 0; color: #4FFFA3;"></i>
+                            <strong>Graphique :</strong> Cliquez sur n'importe quelle crypto pour voir son graphique détaillé
+                        </li>
+                        <li style="margin-bottom: 10px; padding-left: 30px; position: relative;">
+                            <i class="fas fa-check-circle" style="position: absolute; left: 0; color: #4FFFA3;"></i>
+                            <strong>Favoris :</strong> Cliquez sur l'étoile pour ajouter aux favoris
+                        </li>
+                        <li style="margin-bottom: 10px; padding-left: 30px; position: relative;">
+                            <i class="fas fa-check-circle" style="position: absolute; left: 0; color: #4FFFA3;"></i>
+                            <strong>Outils :</strong> Utilisez les boutons en haut pour convertir, calculer, comparer
+                        </li>
+                    </ul>
+                </div>
+                
+                <div style="text-align: center;">
+                    <button onclick="closeWelcomeModal()" style="padding: 15px 40px; background: linear-gradient(135deg, #00AFFF 0%, #4FFFA3 100%); border: none; border-radius: 12px; color: #020915; font-size: 1.1em; font-weight: 700; cursor: pointer; box-shadow: 0 4px 20px rgba(0, 175, 255, 0.4); transition: all 0.3s;">
+                        <i class="fas fa-arrow-right"></i> Commencer maintenant
+                    </button>
+                    <p style="margin-top: 15px; font-size: 0.85em; color: var(--text-secondary);">
+                        <input type="checkbox" id="dont-show-welcome" style="margin-right: 8px;">
+                        Ne plus afficher ce message
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <div class="container">
+        <!-- Header avec Logo π-FI -->
         <div class="header">
-            <h1><i class="fas fa-robot"></i> Bot Crypto Pro</h1>
-            <p><span class="status-indicator"></span>Dashboard en temps réel</p>
+            <div class="logo-container">
+                <img src="/logo?v=3" alt="π-FI Logo" class="logo-img" onerror="this.onerror=null; this.src='/static/pi-fi-logo.png?v=3'; this.onerror=function(){this.style.display='none';};" />
+            </div>
+            <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; justify-content: center;">
+                <h1 style="font-family: 'Montserrat', sans-serif; font-size: 2.5em; font-weight: 800; color: #F5F9FF; margin: 20px 0 10px 0; text-shadow: 0 0 30px rgba(0, 175, 255, 0.5); letter-spacing: 2px;">
+                    π-FI
+                </h1>
+                <span style="background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); color: #020915; padding: 6px 16px; border-radius: 20px; font-size: 0.7em; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4); animation: pulse 2s infinite;">
+                    <i class="fas fa-crown"></i> PREMIUM
+                </span>
+            </div>
+            <p style="color: #5A6C81; font-size: 1.2em; font-weight: 400; margin-bottom: 10px;">
+                AI Powered Finance & Intelligence
+            </p>
+            <p class="tagline">
+                <span class="status-dot"></span>Dashboard Crypto Professionnel en Temps Réel
+            </p>
         </div>
         
-        <div class="stats">
-            <div class="stat-card">
-                <div class="icon"><i class="fas fa-users"></i></div>
-                <h3>Utilisateurs</h3>
-                <div class="value" id="users-count">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="icon"><i class="fas fa-bell"></i></div>
-                <h3>Alertes Actives</h3>
-                <div class="value" id="alerts-count">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="icon"><i class="fas fa-wallet"></i></div>
-                <h3>Wallets Suivis</h3>
-                <div class="value" id="wallets-count">0</div>
-            </div>
+        <!-- Statistiques Globales -->
+        <div class="stats" id="global-stats" style="margin-bottom: 30px;">
             <div class="stat-card">
                 <div class="icon"><i class="fas fa-coins"></i></div>
-                <h3>Tokens Surveillés</h3>
-                <div class="value" id="tokens-count">0</div>
+                <h3>Cryptos Suivies</h3>
+                <div class="value" id="total-cryptos">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon"><i class="fas fa-chart-line"></i></div>
+                <h3>Market Cap Total</h3>
+                <div class="value" id="total-marketcap">$0</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon"><i class="fas fa-exchange-alt"></i></div>
+                <h3>Volume 24h</h3>
+                <div class="value" id="total-volume">$0</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon"><i class="fas fa-percentage"></i></div>
+                <h3>Moyenne 24h</h3>
+                <div class="value" id="avg-change">+0.00%</div>
             </div>
         </div>
         
-        <div class="chart-container">
-            <h2><i class="fas fa-chart-line"></i> Prix Crypto (24h)</h2>
-            <canvas id="priceChart"></canvas>
+        <!-- Barre d'outils utilisateur -->
+        <div class="user-tools" style="margin-bottom: 25px; display: flex; gap: 15px; flex-wrap: wrap; align-items: center; justify-content: space-between; padding: 20px; background: linear-gradient(135deg, rgba(0, 175, 255, 0.08) 0%, rgba(79, 255, 163, 0.05) 100%); border-radius: 12px; border: 1px solid rgba(161, 227, 255, 0.2);">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                <!-- Toggle Thème Sombre/Clair -->
+                <button id="theme-toggle" onclick="toggleTheme()" class="tool-btn" style="padding: 10px 15px; background: rgba(255, 193, 7, 0.15); border: 1px solid rgba(255, 193, 7, 0.3); border-radius: 8px; color: #F5F9FF; cursor: pointer; font-size: 0.9em; transition: all 0.3s;" title="Changer de thème (T)">
+                    <i class="fas fa-moon" id="theme-icon"></i> <span id="theme-text">Sombre</span>
+                </button>
+                <button onclick="(typeof openConverterModal === 'function' ? openConverterModal() : typeof window.openConverterModal === 'function' ? window.openConverterModal() : console.error('openConverterModal non trouvée'));" class="tool-btn" style="padding: 10px 20px; background: rgba(0, 175, 255, 0.15); border: 1px solid rgba(0, 175, 255, 0.3); border-radius: 8px; color: #F5F9FF; cursor: pointer; font-size: 0.9em; transition: all 0.3s;">
+                    <i class="fas fa-exchange-alt"></i> Convertisseur
+                </button>
+                <button onclick="(typeof openCalculatorModal === 'function' ? openCalculatorModal() : typeof window.openCalculatorModal === 'function' ? window.openCalculatorModal() : console.error('openCalculatorModal non trouvée'));" class="tool-btn" style="padding: 10px 20px; background: rgba(79, 255, 163, 0.15); border: 1px solid rgba(79, 255, 163, 0.3); border-radius: 8px; color: #F5F9FF; cursor: pointer; font-size: 0.9em; transition: all 0.3s;">
+                    <i class="fas fa-calculator"></i> Calculateur Profit
+                </button>
+                <button onclick="(typeof openCompareModal === 'function' ? openCompareModal() : typeof window.openCompareModal === 'function' ? window.openCompareModal() : console.error('openCompareModal non trouvée'));" class="tool-btn" style="padding: 10px 20px; background: rgba(255, 193, 7, 0.15); border: 1px solid rgba(255, 193, 7, 0.3); border-radius: 8px; color: #F5F9FF; cursor: pointer; font-size: 0.9em; transition: all 0.3s;">
+                    <i class="fas fa-balance-scale"></i> Comparer
+                </button>
+                <button onclick="(typeof showTutorial === 'function' ? showTutorial() : typeof window.showTutorial === 'function' ? window.showTutorial() : console.error('showTutorial non trouvée'));" class="tool-btn" style="padding: 10px 20px; background: rgba(161, 227, 255, 0.15); border: 1px solid rgba(161, 227, 255, 0.3); border-radius: 8px; color: #F5F9FF; cursor: pointer; font-size: 0.9em; transition: all 0.3s;">
+                    <i class="fas fa-question-circle"></i> Guide
+                </button>
+                <button onclick="(typeof toggleFavoritesView === 'function' ? toggleFavoritesView() : typeof window.toggleFavoritesView === 'function' ? window.toggleFavoritesView() : console.error('toggleFavoritesView non trouvée'));" class="tool-btn" id="favorites-toggle" style="padding: 10px 20px; background: rgba(255, 107, 107, 0.15); border: 1px solid rgba(255, 107, 107, 0.3); border-radius: 8px; color: #F5F9FF; cursor: pointer; font-size: 0.9em; transition: all 0.3s;">
+                    <i class="far fa-star"></i> Favoris (<span id="favorites-count">0</span>)
+                </button>
+                <button onclick="(typeof openAlertsModal === 'function' ? openAlertsModal() : typeof window.openAlertsModal === 'function' ? window.openAlertsModal() : console.error('openAlertsModal non trouvée'));" class="tool-btn" id="alerts-btn" style="padding: 10px 20px; background: rgba(255, 193, 7, 0.15); border: 1px solid rgba(255, 193, 7, 0.3); border-radius: 8px; color: #F5F9FF; cursor: pointer; font-size: 0.9em; transition: all 0.3s; position: relative;">
+                    <i class="fas fa-bell"></i> Alertes (<span id="alerts-count">0</span>)
+                    <span id="alerts-badge" style="display: none; position: absolute; top: -5px; right: -5px; background: #ef4444; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 0.7em; display: flex; align-items: center; justify-content: center; font-weight: bold;">!</span>
+                </button>
+                <button onclick="(typeof openPortfolioModal === 'function' ? openPortfolioModal() : typeof window.openPortfolioModal === 'function' ? window.openPortfolioModal() : console.error('openPortfolioModal non trouvée'));" class="tool-btn" style="padding: 10px 20px; background: rgba(138, 43, 226, 0.15); border: 1px solid rgba(138, 43, 226, 0.3); border-radius: 8px; color: #F5F9FF; cursor: pointer; font-size: 0.9em; transition: all 0.3s;">
+                    <i class="fas fa-wallet"></i> Portefeuille
+                </button>
+                <button onclick="(typeof exportData === 'function' ? exportData('csv') : typeof window.exportData === 'function' ? window.exportData('csv') : console.error('exportData non trouvée'));" class="tool-btn" style="padding: 10px 20px; background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 8px; color: #F5F9FF; cursor: pointer; font-size: 0.9em; transition: all 0.3s;">
+                    <i class="fas fa-download"></i> Exporter
+                </button>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.85em; color: var(--text-secondary);">
+                    <input type="checkbox" id="notifications-enabled" style="cursor: pointer;" onchange="toggleNotifications(this.checked)">
+                    <i class="fas fa-bell"></i> Notifications
+                </label>
+            </div>
         </div>
         
+        <!-- Liste des Prix avec Filtres -->
         <div class="price-list">
-            <h2><i class="fas fa-dollar-sign"></i> Prix Principaux</h2>
-            <button class="refresh-btn" onclick="refreshPrices()"><i class="fas fa-sync-alt"></i> Actualiser</button>
-            <div id="prices-list"></div>
-            <div class="last-update" id="last-update">Dernière mise à jour: --</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; flex-wrap: wrap; gap: 15px;">
+                <h2 style="margin: 0;"><i class="fas fa-dollar-sign"></i> Prix des Cryptomonnaies</h2>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <input type="text" id="search-crypto" placeholder="🔍 Rechercher une crypto..." style="padding: 10px 15px; border-radius: 8px; border: 1px solid rgba(161, 227, 255, 0.3); background: rgba(0, 175, 255, 0.05); color: var(--text-primary); font-size: 0.9em; min-width: 200px;" oninput="if(typeof window.applyFiltersAndSort === 'function') window.applyFiltersAndSort();" onkeyup="if(typeof window.applyFiltersAndSort === 'function') window.applyFiltersAndSort();" />
+                    <select id="sort-crypto" style="padding: 10px 15px; border-radius: 8px; border: 1px solid rgba(161, 227, 255, 0.3); background: rgba(0, 175, 255, 0.05); color: var(--text-primary); font-size: 0.9em; cursor: pointer;" onchange="if(typeof window.applyFiltersAndSort === 'function') window.applyFiltersAndSort();">
+                        <option value="symbol">Trier par: Symbole</option>
+                        <option value="price-desc">Prix: Plus élevé</option>
+                        <option value="price-asc">Prix: Plus bas</option>
+                        <option value="change-desc">Variation: Plus forte hausse</option>
+                        <option value="change-asc">Variation: Plus forte baisse</option>
+                        <option value="favorites">Mes Favoris</option>
+                    </select>
+                <button class="refresh-btn" onclick="if(typeof window.refreshPrices === 'function') window.refreshPrices(); else if(typeof refreshPrices === 'function') refreshPrices(); else location.reload();"><i class="fas fa-sync-alt"></i> Actualiser</button>
+            </div>
+            </div>
+            <div id="prices-list">
+                <div style="text-align: center; color: var(--text-secondary); padding: 40px;">
+                    <i class="fas fa-spinner fa-spin"></i> Chargement des prix...
+                </div>
+            </div>
+            <script>
+                // CHARGEMENT IMMÉDIAT - S'EXÉCUTE AVANT TOUT LE RESTE
+                console.log('🚀 SCRIPT INLINE - Démarrage immédiat');
+                (function loadPricesNow() {
+                    console.log('📥 [INLINE] Tentative de chargement des prix...');
+                    const container = document.getElementById('prices-list');
+                    if (!container) {
+                        console.log('⏳ [INLINE] Container pas encore prêt, réessai dans 100ms...');
+                        setTimeout(loadPricesNow, 100);
+                        return;
+                    }
+                    
+                    console.log('📡 [INLINE] Envoi de la requête à /api/prices...');
+                    fetch('/api/prices?t=' + Date.now())
+                        .then(response => {
+                            console.log('📡 [INLINE] Réponse reçue:', response.status);
+                            if (!response.ok) throw new Error('HTTP ' + response.status);
+                            return response.json();
+                        })
+                        .then(data => {
+                            console.log('📊 [INLINE] Données reçues:', data.prices ? data.prices.length : 0, 'prix');
+                            if (data.prices && Array.isArray(data.prices) && data.prices.length > 0) {
+                                // Essayer avec updatePricesList si disponible
+                                if (typeof window.updatePricesList === 'function') {
+                                    console.log('✅ [INLINE] Utilisation de updatePricesList');
+                                    window.updatePricesList(data.prices);
+                                    if (typeof window.updateLastUpdateTime === 'function') {
+                                        window.updateLastUpdateTime();
+                                    }
+                                } else {
+                                    // Sinon, afficher directement les prix - VERSION ROBUSTE
+                                    console.log('⚠️ [INLINE] updatePricesList pas disponible, affichage direct...');
+                                    container.className = 'prices-grid';
+                                    container.innerHTML = ''; // Vider d'abord
+                                    
+                                    data.prices.forEach((token, index) => {
+                                        try {
+                                            const changeValue = parseFloat(token.change_24h) || 0;
+                                            const isPositive = changeValue >= 0;
+                                            const changeClass = isPositive ? 'positive' : 'negative';
+                                            const changeSign = isPositive ? '+' : '';
+                                            const changeIcon = isPositive ? '<i class="fas fa-arrow-up"></i>' : '<i class="fas fa-arrow-down"></i>';
+                                            const trendText = isPositive ? '📈 Hausse' : '📉 Baisse';
+                                            const trendColor = isPositive ? '#4FFFA3' : '#ef4444';
+                                            const price = parseFloat(token.price) || 0;
+                                            const priceFormatted = '$' + price.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 8});
+                                            
+                                            const item = document.createElement('div');
+                                            item.className = 'price-item';
+                                            item.style.cursor = 'pointer';
+                                            item.style.animationDelay = (index * 0.03) + 's';
+                                            item.style.animation = 'slideUp 0.5s ease-out';
+                                            item.style.animationFillMode = 'both';
+                                            
+                                            if (typeof window.openTradingModal === 'function') {
+                                                item.addEventListener('click', function(e) {
+                                                    e.stopPropagation();
+                                                    if (typeof window.openTradingModal === 'function') {
+                                                        window.openTradingModal(token.symbol, token.name);
+                                                    } else {
+                                                        const modal = document.getElementById('tradingModal');
+                                                        if (modal) {
+                                                            const symbolEl = document.getElementById('modal-symbol');
+                                                            const nameEl = document.getElementById('modal-name');
+                                                            if (symbolEl) symbolEl.textContent = token.symbol;
+                                                            if (nameEl) nameEl.textContent = token.name;
+                                                            modal.classList.add('active');
+                                                        }
+                                                    }
+                                                });
+                                            }
+                                            
+                                            item.innerHTML = 
+                                                '<div class="price-item-header">' +
+                                                    '<div>' +
+                                                        '<div class="symbol" style="display: flex; align-items: center; gap: 8px;">' +
+                                                            '<span>' + (token.symbol || 'N/A') + '</span>' +
+                                                            '<span style="font-size: 0.6em; color: ' + trendColor + '; font-weight: 600;">' + trendText + '</span>' +
+                                                        '</div>' +
+                                                        '<div class="name">' + (token.name || token.symbol || 'Unknown') + '</div>' +
+                                                    '</div>' +
+                                                    '<div style="font-size: 0.75em; color: var(--grey-tech); opacity: 0.7; display: flex; align-items: center; gap: 5px;">' +
+                                                        '<i class="fas fa-hand-pointer"></i> <span>Cliquer</span>' +
+                                                    '</div>' +
+                                                '</div>' +
+                                                '<div>' +
+                                                    '<div class="price" style="margin-bottom: 8px;">' + priceFormatted + '</div>' +
+                                                    '<div class="change ' + changeClass + '" style="font-size: 1.1em; font-weight: 700; padding: 8px 12px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px;">' +
+                                                        changeIcon + ' ' + changeSign + Math.abs(changeValue).toFixed(2) + '%' +
+                                                        '<span style="font-size: 0.85em; opacity: 0.9;">' + (isPositive ? '↑' : '↓') + '</span>' +
+                                                    '</div>' +
+                                                '</div>';
+                                            
+                                            container.appendChild(item);
+                                        } catch(e) {
+                                            console.error('Erreur affichage token', index, ':', e);
+                                        }
+                                    });
+                                    
+                                    // Mettre à jour l'heure
+                                    if (typeof window.updateLastUpdateTime === 'function') {
+                                        window.updateLastUpdateTime();
+                                    } else {
+                                        const updateEl = document.getElementById('last-update');
+                                        if (updateEl) {
+                                            const now = new Date();
+                                            updateEl.textContent = 'Dernière mise à jour: ' + now.toLocaleTimeString('fr-FR');
+                                        }
+                                    }
+                                    
+                                    console.log('✅ [INLINE] ' + data.prices.length + ' prix affichés directement!');
+                                }
+                            } else {
+                                console.warn('⚠️ [INLINE] Aucun prix dans la réponse');
+                                container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:40px;"><i class="fas fa-exclamation-triangle"></i> Aucun prix disponible</div>';
+                            }
+                        })
+                        .catch(err => {
+                            console.error('❌ [INLINE] Erreur:', err);
+                            container.innerHTML = '<div style="text-align:center;color:var(--danger);padding:40px;"><i class="fas fa-exclamation-circle"></i> Erreur: ' + err.message + '</div>';
+                        });
+                })();
+            </script>
+            <div class="last-update" id="last-update" style="margin-top: 20px; text-align: center;">Dernière mise à jour: --</div>
+            
+            <!-- Footer amélioré -->
+            <div class="footer" style="margin-top: 50px; padding: 30px 20px; border-top: 1px solid rgba(161, 227, 255, 0.1); text-align: center; color: var(--text-secondary);">
+                <div style="display: flex; justify-content: center; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 15px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span class="status-dot" id="connection-status" style="background: #4FFFA3; animation: pulse 2s ease-in-out infinite;"></span>
+                        <span id="connection-text">Connecté</span>
+                    </div>
+                    <div style="opacity: 0.6;">|</div>
+                    <div><i class="fas fa-server"></i> API: CoinGecko</div>
+                    <div style="opacity: 0.6;">|</div>
+                    <div><i class="fas fa-clock"></i> <span id="server-time">--:--:--</span></div>
+                </div>
+                <div style="font-size: 0.85em; opacity: 0.7; margin-top: 10px;">
+                    <p style="margin: 5px 0;">© 2024 π-FI Dashboard | AI Powered Finance & Intelligence</p>
+                    <p style="margin: 5px 0; font-size: 0.9em;">
+                        <i class="fas fa-shield-alt"></i> Données en temps réel | 
+                        <i class="fas fa-sync-alt"></i> Mise à jour automatique toutes les 10s |
+                        <i class="fas fa-chart-line"></i> Graphiques interactifs
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Trading -->
+    <div id="tradingModal" class="trading-modal">
+        <div class="trading-modal-content">
+            <div class="trading-modal-header">
+                <div class="modal-header-left">
+                    <img src="/logo?v=2" alt="π-FI Logo" class="modal-logo" onerror="this.src='/static/pi-fi-logo.png?v=2'; this.onerror=function(){this.style.display='none';};" />
+                    <div class="modal-title-group">
+                        <h2><span class="trading-live-indicator"></span><span id="modal-symbol">BTC</span> - <span id="modal-name">Bitcoin</span></h2>
+                    </div>
+                </div>
+                <button class="close-modal" onclick="if(typeof window.closeTradingModal === 'function') window.closeTradingModal(); else if(typeof closeTradingModal === 'function') closeTradingModal();" aria-label="Fermer">&times;</button>
+            </div>
+            
+            <div class="trading-stats" id="trading-stats">
+                <div class="trading-stat-card">
+                    <div class="trading-stat-label"><i class="fas fa-dollar-sign"></i> Prix Actuel</div>
+                    <div class="trading-stat-value" id="stat-price">$0.00</div>
+                </div>
+                <div class="trading-stat-card">
+                    <div class="trading-stat-label"><i class="fas fa-chart-line"></i> 24h Change</div>
+                    <div class="trading-stat-value" id="stat-change">+0.00%</div>
+                </div>
+                <div class="trading-stat-card">
+                    <div class="trading-stat-label"><i class="fas fa-arrow-up"></i> 24h High</div>
+                    <div class="trading-stat-value" id="stat-high">$0.00</div>
+                </div>
+                <div class="trading-stat-card">
+                    <div class="trading-stat-label"><i class="fas fa-arrow-down"></i> 24h Low</div>
+                    <div class="trading-stat-value" id="stat-low">$0.00</div>
+                </div>
+                <div class="trading-stat-card">
+                    <div class="trading-stat-label"><i class="fas fa-exchange-alt"></i> Volume 24h</div>
+                    <div class="trading-stat-value" id="stat-volume">$0</div>
+                </div>
+            </div>
+            
+            <div class="trading-chart-container">
+                <canvas id="tradingChart"></canvas>
+            </div>
+            
+            <!-- Actions utilisateur dans le modal -->
+            <div style="display: flex; gap: 10px; margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(161, 227, 255, 0.2);">
+                <button onclick="if(typeof window.toggleFavorite === 'function' && typeof currentSymbol !== 'undefined') window.toggleFavorite(currentSymbol);" id="favorite-btn" style="flex: 1; padding: 12px; background: rgba(255, 107, 107, 0.15); border: 1px solid rgba(255, 107, 107, 0.3); border-radius: 8px; color: #F5F9FF; cursor: pointer;">
+                    <i class="far fa-star"></i> Ajouter aux Favoris
+                </button>
+                <button onclick="if(typeof window.shareCrypto === 'function' && typeof currentSymbol !== 'undefined') window.shareCrypto(currentSymbol);" style="flex: 1; padding: 12px; background: rgba(0, 175, 255, 0.15); border: 1px solid rgba(0, 175, 255, 0.3); border-radius: 8px; color: #F5F9FF; cursor: pointer;">
+                    <i class="fas fa-share-alt"></i> Partager
+                </button>
+                <button onclick="if(typeof window.setPriceAlert === 'function' && typeof currentSymbol !== 'undefined') window.setPriceAlert(currentSymbol);" style="flex: 1; padding: 12px; background: rgba(79, 255, 163, 0.15); border: 1px solid rgba(79, 255, 163, 0.3); border-radius: 8px; color: #F5F9FF; cursor: pointer;">
+                    <i class="fas fa-bell"></i> Alerte Prix
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Convertisseur -->
+    <div id="converterModal" class="trading-modal">
+        <div class="trading-modal-content" style="max-width: 600px;">
+            <div class="trading-modal-header">
+                <h2><i class="fas fa-exchange-alt"></i> Convertisseur Crypto</h2>
+                <button class="close-modal" onclick="if(typeof window.closeConverterModal === 'function') window.closeConverterModal();">&times;</button>
+            </div>
+            <div style="padding: 20px 0;">
+                <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 15px; align-items: center; margin-bottom: 20px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 0.9em;">De</label>
+                        <select id="convert-from" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(161, 227, 255, 0.3); background: rgba(0, 175, 255, 0.05); color: var(--text-primary);"></select>
+                    </div>
+                    <button onclick="if(typeof window.swapConverter === 'function') window.swapConverter();" style="padding: 12px; background: rgba(0, 175, 255, 0.15); border: 1px solid rgba(0, 175, 255, 0.3); border-radius: 8px; color: #F5F9FF; cursor: pointer; font-size: 1.2em;">
+                        <i class="fas fa-exchange-alt"></i>
+                    </button>
+                    <div>
+                        <label style="display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 0.9em;">Vers</label>
+                        <select id="convert-to" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(161, 227, 255, 0.3); background: rgba(0, 175, 255, 0.05); color: var(--text-primary);">
+                            <option value="USD">USD ($)</option>
+                            <option value="EUR">EUR (€)</option>
+                            <option value="BTC">BTC</option>
+                            <option value="ETH">ETH</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 0.9em;">Montant</label>
+                    <input type="number" id="convert-amount" placeholder="0.00" step="0.00000001" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(161, 227, 255, 0.3); background: rgba(0, 175, 255, 0.05); color: var(--text-primary); font-size: 1.1em;" oninput="if(typeof window.calculateConversion === 'function') window.calculateConversion();" />
+                </div>
+                <div style="padding: 20px; background: rgba(0, 175, 255, 0.1); border-radius: 8px; border: 1px solid rgba(0, 175, 255, 0.2);">
+                    <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 8px;">Résultat</div>
+                    <div id="convert-result" style="font-size: 2em; font-weight: 700; color: #F5F9FF; text-align: center;">--</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Calculateur Profit -->
+    <div id="calculatorModal" class="trading-modal">
+        <div class="trading-modal-content" style="max-width: 600px;">
+            <div class="trading-modal-header">
+                <h2><i class="fas fa-calculator"></i> Calculateur de Profit/Perte</h2>
+                <button class="close-modal" onclick="if(typeof window.closeCalculatorModal === 'function') window.closeCalculatorModal();">&times;</button>
+            </div>
+            <div style="padding: 20px 0;">
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 0.9em;">Crypto</label>
+                        <select id="calc-crypto" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(161, 227, 255, 0.3); background: rgba(0, 175, 255, 0.05); color: var(--text-primary);" onchange="if(typeof window.updateCalcPrice === 'function') window.updateCalcPrice();"></select>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 0.9em;">Prix d'achat ($)</label>
+                        <input type="number" id="calc-buy-price" placeholder="0.00" step="0.00000001" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(161, 227, 255, 0.3); background: rgba(0, 175, 255, 0.05); color: var(--text-primary);" oninput="if(typeof window.calculateProfit === 'function') window.calculateProfit();" />
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 0.9em;">Prix actuel ($)</label>
+                        <input type="number" id="calc-current-price" placeholder="0.00" step="0.00000001" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(161, 227, 255, 0.3); background: rgba(0, 175, 255, 0.05); color: var(--text-primary);" oninput="if(typeof window.calculateProfit === 'function') window.calculateProfit();" />
+                    </div>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 0.9em;">Quantité</label>
+                    <input type="number" id="calc-quantity" placeholder="0.00" step="0.00000001" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(161, 227, 255, 0.3); background: rgba(0, 175, 255, 0.05); color: var(--text-primary);" oninput="if(typeof window.calculateProfit === 'function') window.calculateProfit();" />
+                </div>
+                <div id="calc-result" style="padding: 20px; background: rgba(79, 255, 163, 0.1); border-radius: 8px; border: 1px solid rgba(79, 255, 163, 0.2);">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div>
+                            <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 8px;">Profit/Perte</div>
+                            <div id="calc-profit" style="font-size: 1.8em; font-weight: 700; color: #4FFFA3;">$0.00</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 8px;">Pourcentage</div>
+                            <div id="calc-percentage" style="font-size: 1.8em; font-weight: 700; color: #4FFFA3;">+0.00%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Portefeuille Virtuel -->
+    <div id="portfolioModal" class="trading-modal">
+        <div class="trading-modal-content" style="max-width: 800px;">
+            <div class="trading-modal-header">
+                <h2><i class="fas fa-wallet"></i> Mon Portefeuille Virtuel</h2>
+                <button class="close-modal" onclick="if(typeof window.closePortfolioModal === 'function') window.closePortfolioModal();">&times;</button>
+            </div>
+            <div style="padding: 20px 0;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px;">
+                    <div style="padding: 20px; background: rgba(0, 175, 255, 0.1); border-radius: 12px; border: 1px solid rgba(0, 175, 255, 0.2);">
+                        <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 8px;">Valeur Totale</div>
+                        <div id="portfolio-total" style="font-size: 2em; font-weight: 700; color: #F5F9FF;">$0.00</div>
+                    </div>
+                    <div style="padding: 20px; background: rgba(79, 255, 163, 0.1); border-radius: 12px; border: 1px solid rgba(79, 255, 163, 0.2);">
+                        <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 8px;">Profit/Perte Total</div>
+                        <div id="portfolio-profit" style="font-size: 2em; font-weight: 700; color: #4FFFA3;">$0.00</div>
+                    </div>
+                    <div style="padding: 20px; background: rgba(255, 193, 7, 0.1); border-radius: 12px; border: 1px solid rgba(255, 193, 7, 0.2);">
+                        <div style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 8px;">Nombre d'Actifs</div>
+                        <div id="portfolio-count" style="font-size: 2em; font-weight: 700; color: #FFC107;">0</div>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <h3 style="margin-bottom: 15px; color: #F5F9FF;">Ajouter un Actif</h3>
+                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; margin-bottom: 15px;">
+                        <select id="portfolio-crypto" style="padding: 12px; border-radius: 8px; border: 1px solid rgba(161, 227, 255, 0.3); background: rgba(0, 175, 255, 0.05); color: var(--text-primary);"></select>
+                        <input type="number" id="portfolio-quantity" placeholder="Quantité" step="0.00000001" style="padding: 12px; border-radius: 8px; border: 1px solid rgba(161, 227, 255, 0.3); background: rgba(0, 175, 255, 0.05); color: var(--text-primary);" />
+                        <input type="number" id="portfolio-buy-price" placeholder="Prix d'achat ($)" step="0.01" style="padding: 12px; border-radius: 8px; border: 1px solid rgba(161, 227, 255, 0.3); background: rgba(0, 175, 255, 0.05); color: var(--text-primary);" />
+                        <button onclick="if(typeof window.addToPortfolio === 'function') window.addToPortfolio();" style="padding: 12px 20px; background: rgba(79, 255, 163, 0.15); border: 1px solid rgba(79, 255, 163, 0.3); border-radius: 8px; color: #F5F9FF; cursor: pointer; white-space: nowrap;">
+                            <i class="fas fa-plus"></i> Ajouter
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="portfolio-list" style="max-height: 400px; overflow-y: auto;">
+                    <div style="text-align: center; color: var(--text-secondary); padding: 40px;">
+                        <i class="fas fa-wallet" style="font-size: 3em; opacity: 0.3; margin-bottom: 15px;"></i>
+                        <p>Aucun actif dans votre portefeuille</p>
+                        <p style="font-size: 0.9em; margin-top: 10px;">Ajoutez vos cryptos pour suivre vos gains et pertes</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Comparaison -->
+    <div id="compareModal" class="trading-modal">
+        <div class="trading-modal-content" style="max-width: 800px;">
+            <div class="trading-modal-header">
+                <h2><i class="fas fa-balance-scale"></i> Comparer les Cryptos</h2>
+                <button class="close-modal" onclick="if(typeof window.closeCompareModal === 'function') window.closeCompareModal();">&times;</button>
+            </div>
+            <div style="padding: 20px 0;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 0.9em;">Crypto 1</label>
+                        <select id="compare-crypto1" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(161, 227, 255, 0.3); background: rgba(0, 175, 255, 0.05); color: var(--text-primary);" onchange="if(typeof window.updateComparison === 'function') window.updateComparison();"></select>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 0.9em;">Crypto 2</label>
+                        <select id="compare-crypto2" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid rgba(161, 227, 255, 0.3); background: rgba(0, 175, 255, 0.05); color: var(--text-primary);" onchange="if(typeof window.updateComparison === 'function') window.updateComparison();"></select>
+                    </div>
+                </div>
+                <div id="compare-results" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <!-- Résultats de comparaison -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Alertes -->
+    <div id="alertsModal" class="trading-modal">
+        <div class="trading-modal-content" style="max-width: 800px;">
+            <div class="trading-modal-header">
+                <h2><i class="fas fa-bell"></i> Gestion des Alertes</h2>
+                <button class="close-modal" onclick="if(typeof window.closeAlertsModal === 'function') window.closeAlertsModal();">&times;</button>
+            </div>
+            <div style="padding: 20px 0;">
+                <!-- Formulaire pour créer une nouvelle alerte -->
+                <div style="background: rgba(0, 175, 255, 0.1); padding: 20px; border-radius: 8px; margin-bottom: 25px; border: 1px solid rgba(0, 175, 255, 0.2);">
+                    <h3 style="color: #F5F9FF; margin-bottom: 15px; font-size: 1.1em;"><i class="fas fa-plus-circle"></i> Créer une nouvelle alerte</h3>
+                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; align-items: end;">
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 0.9em;">Crypto</label>
+                            <select id="alert-crypto-select" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(161, 227, 255, 0.3); background: rgba(0, 175, 255, 0.05); color: var(--text-primary);" onchange="if(typeof window.populateAlertsSelect === 'function') window.populateAlertsSelect();"></select>
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 0.9em;">Type</label>
+                            <select id="alert-type-select" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(161, 227, 255, 0.3); background: rgba(0, 175, 255, 0.05); color: var(--text-primary);">
+                                <option value="above">Au-dessus de</option>
+                                <option value="below">En-dessous de</option>
+                                <option value="change">Variation %</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 0.9em;">Valeur</label>
+                            <input type="number" id="alert-value-input" placeholder="0.00" step="0.00000001" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(161, 227, 255, 0.3); background: rgba(0, 175, 255, 0.05); color: var(--text-primary);" />
+                        </div>
+                        <button onclick="if(typeof window.createAlert === 'function') window.createAlert(); else if(typeof createAlert === 'function') createAlert();" style="padding: 10px 20px; background: rgba(79, 255, 163, 0.2); border: 1px solid rgba(79, 255, 163, 0.4); border-radius: 8px; color: #4FFFA3; cursor: pointer; font-weight: 600; white-space: nowrap;">
+                            <i class="fas fa-plus"></i> Ajouter
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Liste des alertes actives -->
+                <div>
+                    <h3 style="color: #F5F9FF; margin-bottom: 15px; font-size: 1.1em;"><i class="fas fa-list"></i> Mes Alertes Actives</h3>
+                    <div id="alerts-list" style="max-height: 400px; overflow-y: auto;">
+                        <!-- Les alertes seront affichées ici -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Guide/Tutoriel -->
+    <div id="tutorialModal" class="trading-modal">
+        <div class="trading-modal-content" style="max-width: 700px;">
+            <div class="trading-modal-header">
+                <h2><i class="fas fa-question-circle"></i> Guide d'utilisation</h2>
+                <button class="close-modal" onclick="if(typeof window.closeTutorialModal === 'function') window.closeTutorialModal();">&times;</button>
+            </div>
+            <div style="padding: 20px 0; max-height: 60vh; overflow-y: auto;">
+                <div style="margin-bottom: 25px;">
+                    <h3 style="color: #F5F9FF; margin-bottom: 10px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-star"></i> Favoris</h3>
+                    <p style="color: var(--text-secondary); line-height: 1.6;">Cliquez sur l'étoile à côté d'une crypto pour l'ajouter à vos favoris. Vous pouvez ensuite filtrer pour voir uniquement vos favoris.</p>
+                </div>
+                <div style="margin-bottom: 25px;">
+                    <h3 style="color: #F5F9FF; margin-bottom: 10px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-bell"></i> Alertes de Prix</h3>
+                    <p style="color: var(--text-secondary); line-height: 1.6;">Activez les notifications dans la barre d'outils, puis définissez des alertes pour être notifié quand le prix atteint un certain niveau.</p>
+                </div>
+                <div style="margin-bottom: 25px;">
+                    <h3 style="color: #F5F9FF; margin-bottom: 10px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-exchange-alt"></i> Convertisseur</h3>
+                    <p style="color: var(--text-secondary); line-height: 1.6;">Convertissez facilement entre différentes cryptos et devises fiat. Entrez un montant et voyez le résultat instantanément.</p>
+                </div>
+                <div style="margin-bottom: 25px;">
+                    <h3 style="color: #F5F9FF; margin-bottom: 10px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-calculator"></i> Calculateur de Profit</h3>
+                    <p style="color: var(--text-secondary); line-height: 1.6;">Calculez votre profit ou perte en entrant votre prix d'achat, le prix actuel et la quantité détenue.</p>
+                </div>
+                <div style="margin-bottom: 25px;">
+                    <h3 style="color: #F5F9FF; margin-bottom: 10px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-balance-scale"></i> Comparaison</h3>
+                    <p style="color: var(--text-secondary); line-height: 1.6;">Comparez deux cryptos côte à côte pour voir leurs différences de prix, variation, volume, etc.</p>
+                </div>
+                <div style="margin-bottom: 25px;">
+                    <h3 style="color: #F5F9FF; margin-bottom: 10px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-chart-line"></i> Graphiques</h3>
+                    <p style="color: var(--text-secondary); line-height: 1.6;">Cliquez sur une crypto pour voir son graphique détaillé avec l'historique des prix et les statistiques complètes.</p>
+                </div>
+            </div>
         </div>
     </div>
     
     <script>
-        const ctx = document.getElementById('priceChart').getContext('2d');
-        const chart = new Chart(ctx, {
+        // ============================================
+        // DÉCLARATIONS IMMÉDIATES - FONCTIONS DE BASE
+        // ============================================
+        
+        // Variables globales
+        let currentSymbol = null;
+        let tradingChart = null;
+        let tradingUpdateInterval = null;
+        window.allPrices = [];
+        
+        // Fonctions de base exposées IMMÉDIATEMENT
+        window.openConverterModal = function() {
+            console.log('🔧 Ouverture convertisseur...');
+            const modal = document.getElementById('converterModal');
+            if (modal) {
+                modal.classList.add('active');
+                console.log('✅ Modal convertisseur ouvert');
+            } else {
+                console.error('❌ Modal convertisseur non trouvé');
+            }
+        };
+        
+        window.closeConverterModal = function() {
+            const modal = document.getElementById('converterModal');
+            if (modal) modal.classList.remove('active');
+        };
+        
+        window.openCalculatorModal = function() {
+            console.log('🧮 Ouverture calculateur...');
+            const modal = document.getElementById('calculatorModal');
+            if (modal) {
+                modal.classList.add('active');
+                console.log('✅ Modal calculateur ouvert');
+            } else {
+                console.error('❌ Modal calculateur non trouvé');
+            }
+        };
+        
+        window.closeCalculatorModal = function() {
+            const modal = document.getElementById('calculatorModal');
+            if (modal) modal.classList.remove('active');
+        };
+        
+        window.openCompareModal = function() {
+            console.log('⚖️ Ouverture comparaison...');
+            const modal = document.getElementById('compareModal');
+            if (modal) {
+                modal.classList.add('active');
+                console.log('✅ Modal comparaison ouvert');
+            } else {
+                console.error('❌ Modal comparaison non trouvé');
+            }
+        };
+        
+        window.closeCompareModal = function() {
+            const modal = document.getElementById('compareModal');
+            if (modal) modal.classList.remove('active');
+        };
+        
+        window.showTutorial = function() {
+            console.log('📚 Ouverture tutoriel...');
+            const modal = document.getElementById('tutorialModal');
+            if (modal) {
+                modal.classList.add('active');
+                console.log('✅ Modal tutoriel ouvert');
+            } else {
+                console.error('❌ Modal tutoriel non trouvé');
+            }
+        };
+        
+        window.closeTutorialModal = function() {
+            const modal = document.getElementById('tutorialModal');
+            if (modal) modal.classList.remove('active');
+        };
+        
+        window.openAlertsModal = function() {
+            console.log('🔔 Ouverture alertes...');
+            const modal = document.getElementById('alertsModal');
+            if (modal) {
+                modal.classList.add('active');
+                console.log('✅ Modal alertes ouvert');
+            } else {
+                console.error('❌ Modal alertes non trouvé');
+            }
+        };
+        
+        window.closeAlertsModal = function() {
+            const modal = document.getElementById('alertsModal');
+            if (modal) modal.classList.remove('active');
+        };
+        
+        window.toggleFavoritesView = function() {
+            console.log('⭐ Toggle favoris...');
+            const sortSelect = document.getElementById('sort-crypto');
+            if (sortSelect) {
+                if (sortSelect.value === 'favorites') {
+                    sortSelect.value = 'symbol';
+                } else {
+                    sortSelect.value = 'favorites';
+                }
+                if (typeof window.applyFiltersAndSort === 'function') {
+                    window.applyFiltersAndSort();
+                }
+            }
+        };
+        
+        window.toggleNotifications = function(enabled) {
+            console.log('🔔 Toggle notifications:', enabled);
+            if (enabled && Notification.permission === 'default') {
+                Notification.requestPermission().then(permission => {
+                    if (permission !== 'granted') {
+                        document.getElementById('notifications-enabled').checked = false;
+                        alert('Les notifications ont été refusées');
+                    } else {
+                        alert('Notifications activées');
+                    }
+                });
+            }
+        };
+        
+        // Fonction de recherche immédiate
+        window.setupSearchImmediate = function() {
+            const searchInput = document.getElementById('search-crypto');
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    console.log('🔍 Recherche:', this.value);
+                    if (typeof window.applyFiltersAndSort === 'function') {
+                        window.applyFiltersAndSort();
+                    }
+                });
+                searchInput.addEventListener('keyup', function() {
+                    if (typeof window.applyFiltersAndSort === 'function') {
+                        window.applyFiltersAndSort();
+                    }
+                });
+                console.log('✅ Recherche configurée');
+            }
+            
+            const sortSelect = document.getElementById('sort-crypto');
+            if (sortSelect) {
+                sortSelect.addEventListener('change', function() {
+                    console.log('🔄 Tri:', this.value);
+                    if (typeof window.applyFiltersAndSort === 'function') {
+                        window.applyFiltersAndSort();
+                    }
+                });
+                console.log('✅ Tri configuré');
+            }
+        };
+        
+        // Appeler immédiatement
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(window.setupSearchImmediate, 100);
+            });
+        } else {
+            setTimeout(window.setupSearchImmediate, 100);
+        }
+        
+        // Déclarer refreshPrices immédiatement pour qu'elle soit disponible dans le HTML
+        window.refreshPrices = function(event) {
+            try {
+                // Cette fonction sera remplacée par la vraie fonction plus tard
+                if (window._refreshPrices) {
+                    return window._refreshPrices(event);
+                }
+                // Si la fonction n'est pas encore chargée, essayer de charger les prix directement
+                if (typeof loadPricesDirectly === 'function') {
+                    loadPricesDirectly();
+                } else {
+                    // Dernier recours: fetch direct
+                    fetch('/api/prices?t=' + Date.now())
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.prices && typeof updatePricesList === 'function') {
+                                updatePricesList(data.prices);
+                                updateLastUpdateTime();
+                            }
+                        })
+                        .catch(err => console.error('Erreur refresh:', err));
+                }
+            } catch(e) {
+                console.error('Erreur refreshPrices:', e);
+            }
+        };
+        
+        // Graphique principal (optionnel - seulement si l'élément existe)
+        let chart = null;
+        const priceChartElement = document.getElementById('priceChart');
+        if (priceChartElement) {
+            const ctx = priceChartElement.getContext('2d');
+            chart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: [],
                 datasets: [{
                     label: 'BTC',
                     data: [],
-                    borderColor: '#f7931a',
-                    backgroundColor: 'rgba(247, 147, 26, 0.15)',
+                    borderColor: '#00AFFF',
+                    backgroundColor: 'rgba(0, 175, 255, 0.15)',
                     borderWidth: 3,
                     tension: 0.4,
                     fill: true,
                     pointRadius: 0,
                     pointHoverRadius: 6,
-                    pointHoverBackgroundColor: '#f7931a',
-                    pointHoverBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#00AFFF',
+                    pointHoverBorderColor: '#F5F9FF',
                     pointHoverBorderWidth: 2
                 }, {
                     label: 'ETH',
                     data: [],
-                    borderColor: '#627eea',
-                    backgroundColor: 'rgba(98, 126, 234, 0.15)',
+                    borderColor: '#4FFFA3',
+                    backgroundColor: 'rgba(79, 255, 163, 0.15)',
                     borderWidth: 3,
                     tension: 0.4,
                     fill: true,
                     pointRadius: 0,
                     pointHoverRadius: 6,
-                    pointHoverBackgroundColor: '#627eea',
-                    pointHoverBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#4FFFA3',
+                    pointHoverBorderColor: '#F5F9FF',
                     pointHoverBorderWidth: 2
                 }, {
                     label: 'SOL',
                     data: [],
-                    borderColor: '#9945ff',
-                    backgroundColor: 'rgba(153, 69, 255, 0.15)',
+                    borderColor: '#A1E3FF',
+                    backgroundColor: 'rgba(161, 227, 255, 0.15)',
                     borderWidth: 3,
                     tension: 0.4,
                     fill: true,
                     pointRadius: 0,
                     pointHoverRadius: 6,
-                    pointHoverBackgroundColor: '#9945ff',
-                    pointHoverBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#A1E3FF',
+                    pointHoverBorderColor: '#F5F9FF',
                     pointHoverBorderWidth: 2
                 }, {
                     label: 'BNB',
                     data: [],
-                    borderColor: '#f3ba2f',
-                    backgroundColor: 'rgba(243, 186, 47, 0.15)',
+                    borderColor: '#00AFFF',
+                    backgroundColor: 'rgba(0, 175, 255, 0.1)',
                     borderWidth: 3,
                     tension: 0.4,
                     fill: true,
                     pointRadius: 0,
                     pointHoverRadius: 6,
-                    pointHoverBackgroundColor: '#f3ba2f',
-                    pointHoverBorderColor: '#fff',
-                    pointHoverBorderWidth: 2
+                    pointHoverBackgroundColor: '#00AFFF',
+                    pointHoverBorderColor: '#F5F9FF',
+                    pointHoverBorderWidth: 2,
+                    borderDash: [5, 5]
                 }]
             },
             options: {
@@ -464,7 +2122,7 @@ HTML_TEMPLATE = """
                         display: true,
                         position: 'top',
                         labels: {
-                            color: '#a0aec0',
+                            color: '#5A6C81',
                             font: {
                                 family: 'Inter',
                                 size: 12,
@@ -478,10 +2136,10 @@ HTML_TEMPLATE = """
                     tooltip: {
                         mode: 'index',
                         intersect: false,
-                        backgroundColor: 'rgba(26, 35, 50, 0.95)',
-                        titleColor: '#ffffff',
-                        bodyColor: '#a0aec0',
-                        borderColor: 'rgba(102, 126, 234, 0.3)',
+                        backgroundColor: 'rgba(2, 9, 21, 0.98)',
+                        titleColor: '#F5F9FF',
+                        bodyColor: '#5A6C81',
+                        borderColor: 'rgba(0, 175, 255, 0.6)',
                         borderWidth: 1,
                         padding: 12,
                         cornerRadius: 8,
@@ -497,11 +2155,11 @@ HTML_TEMPLATE = """
                     y: { 
                         beginAtZero: false,
                         grid: {
-                            color: 'rgba(255, 255, 255, 0.05)',
+                            color: 'rgba(161, 227, 255, 0.08)',
                             drawBorder: false
                         },
                         ticks: {
-                            color: '#a0aec0',
+                            color: '#5A6C81',
                             font: {
                                 family: 'Inter',
                                 size: 11
@@ -516,7 +2174,7 @@ HTML_TEMPLATE = """
                             display: false
                         },
                         ticks: {
-                            color: '#a0aec0',
+                            color: '#5A6C81',
                             font: {
                                 family: 'Inter',
                                 size: 11
@@ -532,6 +2190,7 @@ HTML_TEMPLATE = """
                 }
             }
         });
+        }
         
         function animateValue(element, start, end, duration) {
             const startTime = performance.now();
@@ -590,7 +2249,7 @@ HTML_TEMPLATE = """
         }
         
         function updateChart(priceHistory) {
-            if (!priceHistory) return;
+            if (!priceHistory || !chart) return; // Vérifier que le graphique existe
             
             // Trouver le dataset le plus long pour les labels
             const datasets = ['BTC', 'ETH', 'SOL', 'BNB'];
@@ -618,63 +2277,915 @@ HTML_TEMPLATE = """
             const solData = priceHistory.SOL ? priceHistory.SOL.map(item => item.price) : [];
             const bnbData = priceHistory.BNB ? priceHistory.BNB.map(item => item.price) : [];
             
-            // Mettre à jour le graphique
+            // Mettre à jour le graphique seulement s'il existe
+            if (chart) {
             chart.data.labels = labels;
             chart.data.datasets[0].data = btcData;
             chart.data.datasets[1].data = ethData;
             chart.data.datasets[2].data = solData;
             chart.data.datasets[3].data = bnbData;
             chart.update('none'); // Mise à jour sans animation pour être plus rapide
+            }
         }
         
         function updatePricesList(prices) {
-            const container = document.getElementById('prices-list');
-            container.innerHTML = '';
+            console.log('📊 [updatePricesList] Démarrage avec', prices ? prices.length : 0, 'prix');
+            console.log('📊 [updatePricesList] Type:', typeof prices, 'IsArray:', Array.isArray(prices));
             
-            if (prices.length === 0) {
-                container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px;">Aucun prix disponible</div>';
+            const container = document.getElementById('prices-list');
+            if (!container) {
+                console.error('❌ [updatePricesList] Élément prices-list non trouvé dans le DOM!');
                 return;
             }
             
-            prices.forEach((token, index) => {
-                const changeClass = token.change_24h >= 0 ? 'positive' : 'negative';
-                const changeSign = token.change_24h >= 0 ? '+' : '';
-                const changeIcon = token.change_24h >= 0 ? '<i class="fas fa-arrow-up"></i>' : '<i class="fas fa-arrow-down"></i>';
+            // Vider le container
+            container.innerHTML = '';
+            container.className = 'prices-grid';
+            
+            if (!prices || !Array.isArray(prices) || prices.length === 0) {
+                console.warn('⚠️ [updatePricesList] Aucun prix valide à afficher');
+                container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px;"><i class="fas fa-exclamation-triangle"></i> Aucun prix disponible</div>';
+                return;
+            }
+            
+            console.log('✅ [updatePricesList] Affichage de', prices.length, 'prix');
+            
+            // Trier par symbole pour un affichage ordonné
+            const sortedPrices = [...prices].sort((a, b) => {
+                if (!a || !b || !a.symbol || !b.symbol) return 0;
+                return a.symbol.localeCompare(b.symbol);
+            });
+            
+            console.log('✅ [updatePricesList] Prix triés:', sortedPrices.length);
+            
+            let successCount = 0;
+            let errorCount = 0;
+            
+            // Utiliser un Set pour éviter les doublons par symbole
+            const seenSymbols = new Set();
+            
+            sortedPrices.forEach((token, index) => {
+                try {
+                    if (!token || !token.symbol || !token.name) {
+                        console.warn('⚠️ Token invalide à l\'index', index, token);
+                        errorCount++;
+                        return;
+                    }
+                    
+                    // Vérifier si ce symbole a déjà été affiché
+                    if (seenSymbols.has(token.symbol)) {
+                        console.warn('⚠️ Doublon détecté pour', token.symbol, '- ignoré');
+                        return;
+                    }
+                    seenSymbols.add(token.symbol);
+                    
+                    const changeClass = (token.change_24h >= 0) ? 'positive' : 'negative';
+                    const changeSign = (token.change_24h >= 0) ? '+' : '';
+                    const changeIcon = (token.change_24h >= 0) ? '<i class="fas fa-arrow-up"></i>' : '<i class="fas fa-arrow-down"></i>';
                 
                 const item = document.createElement('div');
                 item.className = 'price-item';
-                item.style.animationDelay = `${index * 0.05}s`;
+                item.style.animationDelay = `${index * 0.03}s`;
                 item.style.animation = 'slideUp 0.5s ease-out';
                 item.style.animationFillMode = 'both';
-                item.innerHTML = `
-                    <div>
-                        <div class="symbol">${token.symbol}</div>
-                        <div class="name">${token.name}</div>
-                    </div>
-                    <div style="text-align: right;">
-                        <div class="price">$${token.price.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-                        <div class="change ${changeClass}">${changeIcon} ${changeSign}${token.change_24h.toFixed(2)}%</div>
-                    </div>
-                `;
+                item.style.cursor = 'pointer';
+                item.style.position = 'relative';
+                    
+                // Gestion du clic avec addEventListener - VERSION ROBUSTE
+                item.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    console.log('🖱️ Clic sur', token.symbol, token.name);
+                    
+                    // Animation de clic
+                    this.style.transform = 'scale(0.98)';
+                    setTimeout(() => {
+                        this.style.transform = '';
+                    }, 150);
+                    
+                    // Appeler la fonction pour ouvrir le modal avec le graphique
+                    const symbol = token.symbol;
+                    const name = token.name;
+                    
+                    console.log('📊 Tentative d\'ouverture du modal pour', symbol);
+                    
+                    // Essayer plusieurs méthodes pour ouvrir le modal
+                    if (typeof window.openCryptoModal === 'function') {
+                        console.log('✅ Utilisation de window.openCryptoModal');
+                        window.openCryptoModal(symbol, name);
+                    } else if (typeof window.openTradingModal === 'function') {
+                        console.log('✅ Utilisation de window.openTradingModal');
+                        window.openTradingModal(symbol, name);
+                    } else if (typeof openCryptoModal === 'function') {
+                        console.log('✅ Utilisation de openCryptoModal (sans window)');
+                        openCryptoModal(symbol, name);
+                    } else if (typeof openTradingModal === 'function') {
+                        console.log('✅ Utilisation de openTradingModal (sans window)');
+                        openTradingModal(symbol, name);
+                    } else {
+                        console.error('❌ Aucune fonction d\'ouverture de modal trouvée');
+                        // Fallback: ouvrir le modal directement et charger le graphique
+                        const modal = document.getElementById('tradingModal');
+                        if (modal) {
+                            const symbolEl = document.getElementById('modal-symbol');
+                            const nameEl = document.getElementById('modal-name');
+                            if (symbolEl) symbolEl.textContent = symbol;
+                            if (nameEl) nameEl.textContent = name || symbol;
+                            modal.classList.add('active');
+                            console.log('✅ Modal ouvert directement (fallback)');
+                            // Essayer de charger le graphique après un délai
+                            setTimeout(() => {
+                                if (typeof window.openCryptoModal === 'function') {
+                                    window.openCryptoModal(symbol, name);
+                                }
+                            }, 500);
+                        } else {
+                            console.error('❌ Modal trading non trouvé dans le DOM');
+                        }
+                    }
+                });
+                
+                item.style.cursor = 'pointer';
+                item.title = 'Cliquez pour voir les détails complets de ' + token.name;
+                
+                    const price = parseFloat(token.price) || 0;
+                    const priceFormatted = '$' + price.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 8});
+                    const changeValue = parseFloat(token.change_24h) || 0;
+                    const changeFormatted = changeIcon + ' ' + changeSign + Math.abs(changeValue).toFixed(2) + '%';
+                    const isPositive = changeValue >= 0;
+                    const trendText = isPositive ? '📈 Hausse' : '📉 Baisse';
+                    const trendColor = isPositive ? '#4FFFA3' : '#ef4444';
+                    
+                item.innerHTML = '<div class="price-item-header">' +
+                    '<div>' +
+                            '<div class="symbol" style="display: flex; align-items: center; gap: 8px;">' +
+                                '<span>' + (token.symbol || 'N/A') + '</span>' +
+                                '<span style="font-size: 0.6em; color: ' + trendColor + '; font-weight: 600;">' + trendText + '</span>' +
+                            '</div>' +
+                            '<div class="name">' + (token.name || token.symbol || 'Unknown') + '</div>' +
+                    '</div>' +
+                    '<div style="font-size: 0.75em; color: var(--grey-tech); opacity: 0.7; display: flex; align-items: center; gap: 5px;">' +
+                        '<i class="fas fa-hand-pointer"></i> <span>Cliquer</span>' +
+                    '</div>' +
+                '</div>' +
+                '<div>' +
+                        '<div class="price" style="margin-bottom: 8px;">' + priceFormatted + '</div>' +
+                        '<div class="change ' + changeClass + '" style="font-size: 1.1em; font-weight: 700; padding: 8px 12px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px;">' +
+                            changeFormatted +
+                            '<span style="font-size: 0.85em; opacity: 0.9;">' + (isPositive ? '↑' : '↓') + '</span>' +
+                        '</div>' +
+                '</div>';
+                    
                 container.appendChild(item);
+                    successCount++;
+                } catch(e) {
+                    console.error('❌ Erreur lors de l\'affichage du token', index, ':', e);
+                    errorCount++;
+                }
             });
+            
+            console.log('✅ [updatePricesList] ' + successCount + ' cryptos affichées avec succès');
+            if (errorCount > 0) {
+                console.warn('⚠️ [updatePricesList] ' + errorCount + ' erreurs lors de l\'affichage');
+            }
+            console.log('💡 [updatePricesList] Les prix sont maintenant visibles dans le DOM');
+            
+            // Stocker les prix pour la recherche et le tri
+            window.allPrices = prices;
+            
+            // Mettre à jour les statistiques globales
+            if (typeof updateGlobalStats === 'function') {
+                updateGlobalStats(prices);
+            }
+            
+            // NE PAS appeler applyFiltersAndSort ici car ça va réafficher tout et causer des duplications
+            // La fonction sera appelée seulement si l'utilisateur recherche ou trie manuellement
+            console.log('✅ [updatePricesList] Prix affichés, pas de filtrage automatique pour éviter les duplications');
         }
         
-        async function refreshPrices() {
+        // Fonction pour appliquer le filtre de recherche et le tri - VERSION COMPLÈTE ET FONCTIONNELLE
+        function applyFiltersAndSort() {
+            console.log('🔄 [applyFiltersAndSort] Démarrage...');
+            const container = document.getElementById('prices-list');
+            if (!container) {
+                console.error('❌ Container prices-list non trouvé');
+                return;
+            }
+            
+            if (!window.allPrices || !Array.isArray(window.allPrices) || window.allPrices.length === 0) {
+                console.warn('⚠️ Aucun prix disponible pour filtrer');
+                // Essayer de récupérer depuis le DOM existant
+                const existingItems = container.querySelectorAll('.price-item');
+                if (existingItems.length > 0) {
+                    const searchInput = document.getElementById('search-crypto');
+                    const searchTerm = (searchInput?.value || '').toLowerCase().trim();
+                    if (searchTerm) {
+                        existingItems.forEach(item => {
+                            const symbol = item.querySelector('.symbol span')?.textContent || '';
+                            const name = item.querySelector('.name')?.textContent || '';
+                            const matches = symbol.toLowerCase().includes(searchTerm) || name.toLowerCase().includes(searchTerm);
+                            item.style.display = matches ? '' : 'none';
+                        });
+                    } else {
+                        existingItems.forEach(item => { item.style.display = ''; });
+                    }
+                }
+                return;
+            }
+            
+            const searchInput = document.getElementById('search-crypto');
+            const sortSelect = document.getElementById('sort-crypto');
+            const searchTerm = (searchInput?.value || '').toLowerCase().trim();
+            const sortValue = sortSelect?.value || 'symbol';
+            
+            console.log('🔍 Terme de recherche:', searchTerm);
+            console.log('🔄 Type de tri:', sortValue);
+            
+            // Filtrer
+            let filtered = [...window.allPrices];
+            if (searchTerm) {
+                filtered = filtered.filter(token => {
+                    const symbolMatch = token.symbol && token.symbol.toLowerCase().includes(searchTerm);
+                    const nameMatch = token.name && token.name.toLowerCase().includes(searchTerm);
+                    return symbolMatch || nameMatch;
+                });
+                console.log('✅ Résultats filtrés:', filtered.length);
+            }
+            
+            // Filtrer par favoris si sélectionné
+            if (sortValue === 'favorites') {
+                const favorites = typeof getFavorites === 'function' ? getFavorites() : [];
+                filtered = filtered.filter(token => favorites.includes(token.symbol));
+                if (filtered.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px;"><i class="far fa-star"></i> Aucun favori ajouté. Cliquez sur l\'étoile pour ajouter des favoris.</div>';
+                    return;
+                }
+            }
+            
+            // Trier
+            filtered.sort((a, b) => {
+                switch(sortValue) {
+                    case 'price-desc':
+                        return (parseFloat(b.price) || 0) - (parseFloat(a.price) || 0);
+                    case 'price-asc':
+                        return (parseFloat(a.price) || 0) - (parseFloat(b.price) || 0);
+                    case 'change-desc':
+                        return (parseFloat(b.change_24h) || 0) - (parseFloat(a.change_24h) || 0);
+                    case 'change-asc':
+                        return (parseFloat(a.change_24h) || 0) - (parseFloat(b.change_24h) || 0);
+                    case 'favorites':
+                        return (a.symbol || '').localeCompare(b.symbol || '');
+                    case 'symbol':
+                    default:
+                        return (a.symbol || '').localeCompare(b.symbol || '');
+                }
+            });
+            
+            // TOUJOURS réafficher pour appliquer les filtres/tri
+            if (filtered.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px;"><i class="fas fa-search"></i> Aucun résultat trouvé' + (searchTerm ? ' pour "' + searchTerm + '"' : '') + '</div>';
+                return;
+            }
+            
+            // Vider et réafficher avec les résultats filtrés
+            container.innerHTML = '';
+            container.className = 'prices-grid';
+            
+            filtered.forEach((token, index) => {
+                try {
+                    if (!token || !token.symbol || !token.name) return;
+                    
+                    const changeClass = (token.change_24h >= 0) ? 'positive' : 'negative';
+                    const changeSign = (token.change_24h >= 0) ? '+' : '';
+                    const changeIcon = (token.change_24h >= 0) ? '<i class="fas fa-arrow-up"></i>' : '<i class="fas fa-arrow-down"></i>';
+                    const trendText = (token.change_24h >= 0) ? '📈 Hausse' : '📉 Baisse';
+                    const trendColor = (token.change_24h >= 0) ? '#4FFFA3' : '#ef4444';
+                    
+                    const item = document.createElement('div');
+                    item.className = 'price-item';
+                    item.style.animationDelay = `${index * 0.03}s`;
+                    item.style.animation = 'slideUp 0.5s ease-out';
+                    item.style.animationFillMode = 'both';
+                    item.style.cursor = 'pointer';
+                    item.style.position = 'relative';
+                    
+                    // Gestion du clic avec addEventListener - VERSION ROBUSTE
+                    item.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        console.log('🖱️ Clic sur', token.symbol, token.name);
+                        
+                        // Animation de clic
+                        this.style.transform = 'scale(0.98)';
+                        setTimeout(() => {
+                            this.style.transform = '';
+                        }, 150);
+                        
+                        // Appeler la fonction pour ouvrir le modal avec le graphique
+                        const symbol = token.symbol;
+                        const name = token.name;
+                        
+                        console.log('📊 Tentative d\'ouverture du modal pour', symbol);
+                        
+                        // Essayer plusieurs méthodes pour ouvrir le modal
+                        if (typeof window.openCryptoModal === 'function') {
+                            console.log('✅ Utilisation de window.openCryptoModal');
+                            window.openCryptoModal(symbol, name);
+                        } else if (typeof window.openTradingModal === 'function') {
+                            console.log('✅ Utilisation de window.openTradingModal');
+                            window.openTradingModal(symbol, name);
+                        } else if (typeof openCryptoModal === 'function') {
+                            console.log('✅ Utilisation de openCryptoModal (sans window)');
+                            openCryptoModal(symbol, name);
+                        } else if (typeof openTradingModal === 'function') {
+                            console.log('✅ Utilisation de openTradingModal (sans window)');
+                            openTradingModal(symbol, name);
+                        } else {
+                            console.error('❌ Aucune fonction d\'ouverture de modal trouvée');
+                            // Fallback: ouvrir le modal directement et charger le graphique
+                            const modal = document.getElementById('tradingModal');
+                            if (modal) {
+                                const symbolEl = document.getElementById('modal-symbol');
+                                const nameEl = document.getElementById('modal-name');
+                                if (symbolEl) symbolEl.textContent = symbol;
+                                if (nameEl) nameEl.textContent = name || symbol;
+                                modal.classList.add('active');
+                                console.log('✅ Modal ouvert directement (fallback)');
+                                // Essayer de charger le graphique après un délai
+                                setTimeout(() => {
+                                    if (typeof window.openCryptoModal === 'function') {
+                                        window.openCryptoModal(symbol, name);
+                                    }
+                                }, 500);
+                            } else {
+                                console.error('❌ Modal trading non trouvé dans le DOM');
+                            }
+                        }
+                    });
+                    
+                    const price = parseFloat(token.price) || 0;
+                    const priceFormatted = '$' + price.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 8});
+                    const changeValue = parseFloat(token.change_24h) || 0;
+                    const changeFormatted = changeIcon + ' ' + changeSign + Math.abs(changeValue).toFixed(2) + '%';
+                    const isFav = typeof isFavorite === 'function' ? isFavorite(token.symbol) : false;
+                    
+                    item.innerHTML = `
+                        <button class="favorite-btn" data-symbol="${token.symbol}" onclick="event.stopPropagation(); if(typeof window.toggleFavorite === 'function') window.toggleFavorite('${token.symbol}');" style="position: absolute; top: 10px; right: 10px; background: transparent; border: none; color: ${isFav ? '#FFD700' : '#5A6C81'}; cursor: pointer; font-size: 1.2em; padding: 5px; z-index: 10;">
+                            <i class="${isFav ? 'fas' : 'far'} fa-star"></i>
+                        </button>
+                        <div class="price-item-header">
+                            <div>
+                                <div class="symbol" style="display: flex; align-items: center; gap: 8px;">
+                                    <span>${token.symbol}</span>
+                                    <span style="font-size: 0.6em; color: ${trendColor}; font-weight: 600;">${trendText}</span>
+                                </div>
+                                <div class="name">${token.name}</div>
+                            </div>
+                            <div style="font-size: 0.75em; color: var(--grey-tech); opacity: 0.7; display: flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-hand-pointer"></i> <span>Cliquer</span>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="price" style="margin-bottom: 8px;">${priceFormatted}</div>
+                            <div class="change ${changeClass}" style="font-size: 1.1em; font-weight: 700; padding: 8px 12px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px;">
+                                ${changeFormatted}
+                                <span style="font-size: 0.85em; opacity: 0.9;">${token.change_24h >= 0 ? '↑' : '↓'}</span>
+                            </div>
+                        </div>
+                    `;
+                    
+                    container.appendChild(item);
+                } catch(e) {
+                    console.error('Erreur affichage token filtré:', e);
+                }
+            });
+            
+            console.log('✅ Filtres appliqués:', filtered.length, 'éléments affichés');
+        }
+        
+        // NOTE: refreshPrices sera exposée globalement APRÈS sa définition (voir ligne ~1643)
+        
+        let tradingChart = null;
+        let tradingUpdateInterval = null;
+        let currentSymbol = null;
+        
+        /**
+         * Fonction principale pour récupérer les données crypto
+         * Gère toutes les structures API possibles
+         */
+        async function fetchCryptoData(symbol) {
+            try {
+                console.log('🔍 Récupération des données pour ' + symbol + '...');
+                const response = await fetch('/api/crypto/' + symbol + '?t=' + Date.now());
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                console.log('📦 Données reçues pour ' + symbol + ':', data);
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                // Normaliser les données selon différentes structures possibles
+                let price = data.price || data.prices || data.market_data?.current_price?.usd || 0;
+                let change = data.change || data.change_24h || data.price_change_percentage_24h || data.market_data?.price_change_percentage_24h || 0;
+                let high = data.high || data.high_24h || data.market_data?.high_24h?.usd || price;
+                let low = data.low || data.low_24h || data.market_data?.low_24h?.usd || price;
+                let volume = data.volume || data.volume_24h || data.market_data?.total_volume?.usd || 0;
+                let history = data.history || data.price_history || [];
+                
+                // Convertir en nombres
+                price = parseFloat(price) || 0;
+                change = parseFloat(change) || 0;
+                high = parseFloat(high) || price;
+                low = parseFloat(low) || price;
+                volume = parseFloat(volume) || 0;
+                
+                // Générer un historique fallback si nécessaire (24h avec 48 points)
+                if (!history || history.length < 10) {
+                    history = generateFallbackHistory(price, change, high, low, 48);
+                }
+                
+                return {
+                    price,
+                    change,
+                    high,
+                    low,
+                    volume,
+                    history
+                };
+            } catch (error) {
+                console.error('Erreur fetchCryptoData:', error);
+                throw error;
+            }
+        }
+        
+        /**
+         * Génère un historique fallback réaliste sur 24h
+         */
+        function generateFallbackHistory(currentPrice, change24h, high24h, low24h, numPoints = 48) {
+            const history = [];
+            const now = new Date();
+            const trend = change24h / 100; // Tendance en décimal
+            const priceRange = high24h - low24h;
+            
+            for (let i = numPoints - 1; i >= 0; i--) {
+                const pointTime = new Date(now.getTime() - i * 30 * 60000); // 30 minutes entre chaque point
+                const progress = i / numPoints; // 0 à 1
+                
+                // Variation sinusoïdale avec tendance
+                const sineVariation = Math.sin(progress * Math.PI * 2) * 0.015;
+                const trendVariation = trend * (1 - progress);
+                const randomVariation = (Math.random() - 0.5) * 0.01;
+                
+                let price = currentPrice * (1 - trendVariation - sineVariation + randomVariation);
+                
+                // S'assurer que le prix reste dans la fourchette 24h
+                price = Math.max(low24h * 0.995, Math.min(high24h * 1.005, price));
+                
+                history.push({
+                    time: pointTime.toISOString(),
+                    price: parseFloat(price.toFixed(2))
+                });
+            }
+            
+            return history;
+        }
+        
+        /**
+         * Ouvre le modal crypto avec les données
+         */
+        async function openCryptoModal(symbol, name) {
+            console.log('📊 [openCryptoModal] Début - Symbol:', symbol, 'Name:', name);
+            currentSymbol = symbol;
+            
+            // Mettre à jour le titre du modal
+            const symbolEl = document.getElementById('modal-symbol');
+            const nameEl = document.getElementById('modal-name');
+            const modal = document.getElementById('tradingModal');
+            
+            if (!symbolEl || !nameEl || !modal) {
+                console.error('❌ Éléments du modal non trouvés:', {
+                    symbolEl: !!symbolEl,
+                    nameEl: !!nameEl,
+                    modal: !!modal
+                });
+                return;
+            }
+            
+            symbolEl.textContent = symbol;
+            nameEl.textContent = name || symbol;
+            modal.classList.add('active');
+            console.log('✅ Modal ouvert pour', symbol);
+            
+            // Afficher un indicateur de chargement
+            const modalTitle = document.querySelector('.modal-title-group h2');
+            if (modalTitle) {
+                modalTitle.innerHTML = '<span class="trading-live-indicator"></span><span id="modal-symbol">' + symbol + '</span> - <span id="modal-name">' + (name || symbol) + '</span> <span style="font-size: 0.6em; opacity: 0.7;">(Chargement...)</span>';
+            }
+            
+            // Attendre que le modal soit complètement visible
+            setTimeout(async () => {
+                // Initialiser le graphique
+                const canvas = document.getElementById('tradingChart');
+                if (!canvas) {
+                    console.error('Canvas tradingChart non trouvé');
+                    return;
+                }
+                
+                const container = canvas.parentElement;
+                if (container) {
+                    container.style.display = 'block';
+                    container.style.height = '400px';
+                    container.style.minHeight = '400px';
+                    container.style.visibility = 'visible';
+                    container.style.opacity = '1';
+                }
+                
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    console.error('❌ Impossible d\'obtenir le contexte 2D');
+                    return;
+                }
+                
+                // Détruire l'ancien graphique
+                if (tradingChart) {
+                    console.log('🗑️ Destruction de l\'ancien graphique');
+                    try {
+                        tradingChart.destroy();
+                    } catch(e) {
+                        console.warn('⚠️ Erreur destruction:', e);
+                    }
+                    tradingChart = null;
+                }
+                
+                console.log('✅ Création du nouveau graphique pour', symbol);
+                // Créer le nouveau graphique avec ligne lissée
+                // La couleur sera mise à jour selon la tendance dans updateCryptoModal
+                tradingChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: symbol,
+                            data: [],
+                            borderColor: '#00AFFF', // Couleur par défaut, sera mise à jour selon la tendance
+                            backgroundColor: 'rgba(0, 175, 255, 0.15)',
+                            borderWidth: 3,
+                            tension: 0.4, // Ligne lissée style TradingView
+                            fill: true,
+                            pointRadius: 0, // Pas de points visibles
+                            pointHoverRadius: 8,
+                            pointHoverBackgroundColor: '#00AFFF',
+                            pointHoverBorderColor: '#F5F9FF',
+                            pointHoverBorderWidth: 2,
+                            pointBackgroundColor: 'transparent',
+                            pointBorderColor: 'transparent'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: {
+                            duration: 800,
+                            easing: 'easeInOutQuart'
+                        },
+                        layout: {
+                            padding: {
+                                top: 10,
+                                bottom: 10,
+                                left: 10,
+                                right: 10
+                            }
+                        },
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        },
+                        plugins: {
+                            legend: {
+                                display: false // Pas de légende
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(2, 9, 21, 0.98)',
+                                titleColor: '#F5F9FF',
+                                bodyColor: '#5A6C81',
+                                borderColor: 'rgba(0, 175, 255, 0.6)',
+                                borderWidth: 1,
+                                padding: 12,
+                                displayColors: false,
+                                callbacks: {
+                                    label: function(context) {
+                                        return '$' + context.parsed.y.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 8});
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                grid: {
+                                    color: 'rgba(161, 227, 255, 0.08)',
+                                    drawBorder: false
+                                },
+                                ticks: {
+                                    color: '#5A6C81',
+                                    font: {
+                                        size: 11
+                                    },
+                                    callback: function(value) {
+                                        return '$' + value.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                                    }
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false,
+                                    drawBorder: false
+                                },
+                                ticks: {
+                                    color: '#5A6C81',
+                                    font: {
+                                        size: 11
+                                    },
+                                    maxTicksLimit: 8
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // Charger les données initiales IMMÉDIATEMENT
+                try {
+                    console.log('📊 Chargement des données pour', symbol);
+                    await updateCryptoModal(symbol);
+                    console.log('✅ Données chargées avec succès pour', symbol);
+                } catch (error) {
+                    console.error('❌ Erreur lors du chargement des données:', error);
+                    // Afficher un message d'erreur dans le modal
+                    const modalTitle = document.querySelector('.modal-title-group h2');
+                    if (modalTitle) {
+                        modalTitle.innerHTML = '<span id="modal-symbol">' + symbol + '</span> - <span id="modal-name">' + (name || symbol) + '</span> <span style="color: #ef4444; font-size: 0.6em;">(Erreur de chargement)</span>';
+                    }
+                }
+                
+                // Mettre à jour toutes les 3 secondes
+                if (tradingUpdateInterval) {
+                    clearInterval(tradingUpdateInterval);
+                }
+                tradingUpdateInterval = setInterval(async () => {
+                    if (currentSymbol === symbol) {
+                        try {
+                            await updateCryptoModal(symbol);
+                        } catch (error) {
+                            console.error('❌ Erreur mise à jour automatique:', error);
+                        }
+                    }
+                }, 3000);
+            }, 300);
+        }
+        
+        /**
+         * Met à jour le modal avec les données crypto
+         */
+        async function updateCryptoModal(symbol) {
+            try {
+                console.log('📊 Chargement des données pour ' + symbol + '...');
+                const data = await fetchCryptoData(symbol);
+                console.log('✅ Données reçues pour ' + symbol + ':', data);
+                
+                // Mettre à jour les statistiques
+                document.getElementById('stat-price').textContent = '$' + data.price.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 8});
+                
+                const changeValue = parseFloat(data.change) || 0;
+                const isPositive = changeValue >= 0;
+                const changeClass = isPositive ? 'positive' : 'negative';
+                const changeSign = isPositive ? '+' : '';
+                const changeIcon = isPositive ? '📈 ↑' : '📉 ↓';
+                const trendText = isPositive ? 'HAUSSE' : 'BAISSE';
+                
+                const changeElement = document.getElementById('stat-change');
+                changeElement.innerHTML = `${changeIcon} ${changeSign}${Math.abs(changeValue).toFixed(2)}% <span style="font-size: 0.7em; opacity: 0.8;">(${trendText})</span>`;
+                changeElement.className = 'trading-stat-value ' + changeClass;
+                
+                // Mettre à jour le titre du modal avec la tendance
+                const modalTitle = document.querySelector('.modal-title-group h2');
+                if (modalTitle) {
+                    const symbolEl = document.getElementById('modal-symbol');
+                    const nameEl = document.getElementById('modal-name');
+                    if (symbolEl && nameEl) {
+                        modalTitle.innerHTML = '<span class="trading-live-indicator"></span><span id="modal-symbol">' + symbolEl.textContent + '</span> - <span id="modal-name">' + nameEl.textContent + '</span> <span style="font-size: 0.6em; color: ' + (isPositive ? '#4FFFA3' : '#ef4444') + '; margin-left: 10px;">' + changeIcon + ' ' + trendText + '</span>';
+                    }
+                }
+                
+                document.getElementById('stat-high').textContent = '$' + data.high.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('stat-low').textContent = '$' + data.low.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                
+                const volume = data.volume || 0;
+                let volumeText = '';
+                if (volume >= 1000000000) {
+                    volumeText = '$' + (volume / 1000000000).toFixed(2) + 'B';
+                } else if (volume >= 1000000) {
+                    volumeText = '$' + (volume / 1000000).toFixed(2) + 'M';
+                } else if (volume >= 1000) {
+                    volumeText = '$' + (volume / 1000).toFixed(2) + 'K';
+                } else {
+                    volumeText = '$' + volume.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                }
+                document.getElementById('stat-volume').textContent = volumeText;
+                
+                // Mettre à jour le graphique avec couleur selon la tendance
+                console.log('📈 Mise à jour du graphique pour', symbol);
+                console.log('📈 tradingChart existe?', !!tradingChart);
+                console.log('📈 data.history existe?', !!data.history, 'Longueur:', data.history?.length);
+                
+                if (!tradingChart) {
+                    console.error('❌ tradingChart n\'existe pas encore');
+                    // Essayer de réinitialiser le graphique
+                    setTimeout(() => {
+                        const canvas = document.getElementById('tradingChart');
+                        if (canvas && typeof Chart !== 'undefined') {
+                            const ctx = canvas.getContext('2d');
+                            tradingChart = new Chart(ctx, {
+                                type: 'line',
+                                data: { labels: [], datasets: [{
+                                    label: symbol,
+                                    data: [],
+                                    borderColor: '#00AFFF',
+                                    backgroundColor: 'rgba(0, 175, 255, 0.15)',
+                                    borderWidth: 3,
+                                    tension: 0.4,
+                                    fill: true,
+                                    pointRadius: 0
+                                }]},
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: { legend: { display: false } }
+                                }
+                            });
+                            console.log('✅ Graphique réinitialisé');
+                        }
+                    }, 500);
+                    return;
+                }
+                
+                if (data.history && data.history.length > 0) {
+                    const labels = data.history.map(item => {
+                        try {
+                            const date = new Date(item.time);
+                            return date.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
+                        } catch (e) {
+                            return '';
+                        }
+                    });
+                    const prices = data.history.map(item => parseFloat(item.price) || 0);
+                    
+                    if (labels.length > 0 && prices.length > 0 && labels.length === prices.length) {
+                        const validPrices = prices.filter(p => !isNaN(p) && p > 0);
+                        const validLabels = labels.slice(0, validPrices.length);
+                        
+                        if (validPrices.length > 0) {
+                            console.log('✅ Mise à jour du graphique avec', validPrices.length, 'points');
+                            // Déterminer la couleur selon la tendance
+                            const firstPrice = validPrices[0];
+                            const lastPrice = validPrices[validPrices.length - 1];
+                            const isPositiveTrend = lastPrice >= firstPrice;
+                            const chartColor = isPositiveTrend ? '#4FFFA3' : '#ef4444';
+                            const chartBgColor = isPositiveTrend ? 'rgba(79, 255, 163, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+                            
+                            tradingChart.data.labels = validLabels;
+                            tradingChart.data.datasets[0].data = validPrices;
+                            tradingChart.data.datasets[0].label = symbol;
+                            tradingChart.data.datasets[0].borderColor = chartColor;
+                            tradingChart.data.datasets[0].backgroundColor = chartBgColor;
+                            tradingChart.data.datasets[0].pointHoverBackgroundColor = chartColor;
+                            
+                            // Ajuster les échelles
+                            const minPrice = Math.min(...validPrices);
+                            const maxPrice = Math.max(...validPrices);
+                            const padding = (maxPrice - minPrice) * 0.1 || maxPrice * 0.05;
+                            
+                            tradingChart.options.scales.y.min = Math.max(0, minPrice - padding);
+                            tradingChart.options.scales.y.max = maxPrice + padding;
+                            
+                            tradingChart.update('active');
+                            console.log('✅ Graphique mis à jour avec succès');
+                        } else {
+                            console.warn('⚠️ Aucun prix valide pour le graphique');
+                        }
+                    } else {
+                        console.warn('⚠️ Labels et prix ne correspondent pas');
+                    }
+                } else {
+                    console.warn('⚠️ Pas d\'historique disponible pour', symbol);
+                }
+            } catch (error) {
+                console.error('Erreur updateCryptoModal:', error);
+            }
+        }
+        
+        /**
+         * Alias pour compatibilité avec le code existant
+         */
+        function openTradingModal(symbol, name) {
+            console.log('📊 [openTradingModal] Ouverture pour', symbol, name);
+            if (typeof openCryptoModal === 'function') {
+                openCryptoModal(symbol, name);
+            } else {
+                console.error('❌ openCryptoModal non trouvée, ouverture directe...');
+                const modal = document.getElementById('tradingModal');
+                if (modal) {
+                    const symbolEl = document.getElementById('modal-symbol');
+                    const nameEl = document.getElementById('modal-name');
+                    if (symbolEl) symbolEl.textContent = symbol;
+                    if (nameEl) nameEl.textContent = name || symbol;
+                    modal.classList.add('active');
+                    console.log('✅ Modal ouvert directement');
+                } else {
+                    console.error('❌ Modal trading non trouvé dans le DOM');
+                }
+            }
+        }
+        
+        function closeTradingModal() {
+            console.log('Fermeture du modal');
+            document.getElementById('tradingModal').classList.remove('active');
+            if (tradingUpdateInterval) {
+                clearInterval(tradingUpdateInterval);
+                tradingUpdateInterval = null;
+            }
+            currentSymbol = null;
+            if (tradingChart) {
+                tradingChart.destroy();
+                tradingChart = null;
+            }
+        }
+        
+        // Fermer avec la touche Escape
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                const modal = document.getElementById('tradingModal');
+                if (modal.classList.contains('active')) {
+                    closeTradingModal();
+                }
+            }
+        });
+        
+        // Fermer le modal en cliquant en dehors
+        document.addEventListener('click', function(event) {
+            const modal = document.getElementById('tradingModal');
+            if (event.target === modal) {
+                closeTradingModal();
+            }
+        });
+        
+        // Ancienne fonction pour compatibilité (dépréciée)
+        async function loadTradingData(symbol) {
+            // Utiliser la nouvelle fonction updateCryptoModal
+            await updateCryptoModal(symbol);
+        }
+        
+        async function refreshPrices(event) {
+            // Gérer l'appel avec ou sans paramètre
+            if (!event) {
+                event = { target: document.querySelector('.refresh-btn') };
+            }
             const btn = event?.target || document.querySelector('.refresh-btn');
-            const icon = btn.querySelector('i');
+            const icon = btn?.querySelector('i');
             
             if (icon) {
                 icon.style.animation = 'spin 1s linear infinite';
             }
             
             try {
-                const response = await fetch('/api/prices');
+                console.log('🔄 Actualisation des prix...');
+                const response = await fetch('/api/prices?t=' + Date.now());
+                if (!response.ok) {
+                    throw new Error('HTTP error! status: ' + response.status);
+                }
                 const data = await response.json();
-                updatePricesList(data.prices || []);
-                updateLastUpdateTime();
+                console.log('📊 Prix reçus: ' + (data.prices ? data.prices.length : 0) + ' cryptos');
+                
+                if (data.prices && data.prices.length > 0) {
+                    console.log('✅ Appel de updatePricesList avec', data.prices.length, 'prix');
+                    updatePricesList(data.prices);
+                    updateLastUpdateTime();
+                    console.log('✅ ' + data.prices.length + ' prix affichés avec succès');
+                } else {
+                    console.warn('⚠️ Aucun prix reçu dans la réponse');
+                    const container = document.getElementById('prices-list');
+                    if (container) {
+                        container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px;"><i class="fas fa-exclamation-triangle"></i> Aucun prix disponible. Cliquez sur Actualiser.</div>';
+                    }
+                }
             } catch (error) {
-                console.error('Erreur actualisation prix:', error);
+                console.error('❌ Erreur actualisation prix:', error);
+                const container = document.getElementById('prices-list');
+                if (container) {
+                    container.innerHTML = '<div style="text-align: center; color: var(--danger); padding: 40px;"><i class="fas fa-exclamation-circle"></i> Erreur: ' + error.message + '<br><small>Vérifiez la console pour plus de détails</small></div>';
+                }
             } finally {
                 if (icon) {
                     setTimeout(() => {
@@ -684,18 +3195,1482 @@ HTML_TEMPLATE = """
             }
         }
         
-        // Charger les données au démarrage
-        loadData();
-        refreshPrices();
+        // FONCTION SIMPLE POUR CHARGER LES PRIX DIRECTEMENT - VERSION ULTRA SIMPLIFIÉE
+        function loadPricesDirectly() {
+            console.log('📥 [loadPricesDirectly] Démarrage du chargement...');
+            const container = document.getElementById('prices-list');
+            if (!container) {
+                console.error('❌ Container prices-list non trouvé');
+                setTimeout(loadPricesDirectly, 500);
+                return;
+            }
+            
+            console.log('📡 [loadPricesDirectly] Envoi de la requête à /api/prices...');
+            fetch('/api/prices?t=' + Date.now())
+                .then(response => {
+                    console.log('📡 [loadPricesDirectly] Réponse reçue:', response.status, response.statusText);
+                    if (!response.ok) {
+                        throw new Error('HTTP ' + response.status + ' ' + response.statusText);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('📊 [loadPricesDirectly] Données JSON reçues:', data);
+                    console.log('📊 [loadPricesDirectly] Type de data.prices:', typeof data.prices);
+                    console.log('📊 [loadPricesDirectly] Nombre de prix:', data.prices ? data.prices.length : 'null/undefined');
+                    
+                    if (data && data.prices && Array.isArray(data.prices) && data.prices.length > 0) {
+                        console.log('✅ [loadPricesDirectly] Appel de updatePricesList avec', data.prices.length, 'prix');
+                        try {
+                        updatePricesList(data.prices);
+                        updateLastUpdateTime();
+                            console.log('✅ [loadPricesDirectly] Prix affichés avec succès!');
+                        } catch(e) {
+                            console.error('❌ [loadPricesDirectly] Erreur dans updatePricesList:', e);
+                            console.error('Stack:', e.stack);
+                            container.innerHTML = '<div style="text-align: center; color: var(--danger); padding: 40px;"><i class="fas fa-exclamation-circle"></i> Erreur d\'affichage: ' + e.message + '</div>';
+                        }
+                    } else {
+                        console.warn('⚠️ [loadPricesDirectly] Aucun prix valide. Data complète:', JSON.stringify(data));
+                        container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px;"><i class="fas fa-exclamation-triangle"></i> Aucun prix disponible dans la réponse API</div>';
+                    }
+                })
+                .catch(err => {
+                    console.error('❌ [loadPricesDirectly] Erreur complète:', err);
+                    console.error('❌ [loadPricesDirectly] Stack:', err.stack);
+                    container.innerHTML = '<div style="text-align: center; color: var(--danger); padding: 40px;"><i class="fas fa-exclamation-circle"></i> Erreur: ' + err.message + '<br><small>Vérifiez la console (F12) pour plus de détails</small></div>';
+                });
+        }
         
-        // Actualiser toutes les 30 secondes
+        // Exposer toutes les fonctions globalement
+        window.refreshPrices = refreshPrices; // Remplacer la fonction wrapper
+        window._refreshPrices = refreshPrices; // Garder une référence
+        window.updatePricesList = updatePricesList;
+        window.loadPricesDirectly = loadPricesDirectly;
+        console.log('✅ Fonctions exposées globalement: refreshPrices, updatePricesList, loadPricesDirectly');
+        
+        // FORCER le chargement immédiat des prix - MÉTHODE AGRESSIVE
+        function forceLoadPrices() {
+            console.log('🚀 FORCEMENT du chargement des prix...');
+            const container = document.getElementById('prices-list');
+            if (!container) {
+                console.error('❌ Container prices-list non trouvé');
+                setTimeout(forceLoadPrices, 200);
+                return;
+            }
+            
+            // Afficher un indicateur de chargement
+            container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement des prix...</div>';
+            
+            // Timeout pour éviter que ça reste bloqué
+            const timeoutId = setTimeout(() => {
+                console.error('⏱️ Timeout - Le chargement prend trop de temps');
+                container.innerHTML = '<div style="text-align: center; color: var(--danger); padding: 40px;"><i class="fas fa-exclamation-circle"></i> Le chargement prend trop de temps.<br><button onclick="forceLoadPrices()" style="margin-top: 10px; padding: 8px 16px; background: var(--accent-primary); color: var(--bg-primary); border: none; border-radius: 8px; cursor: pointer;">Réessayer</button></div>';
+            }, 10000); // 10 secondes max
+            
+            fetch('/api/prices?t=' + Date.now())
+                .then(response => {
+                    clearTimeout(timeoutId);
+                    console.log('📡 Réponse reçue:', response.status);
+                    if (!response.ok) {
+                        throw new Error('HTTP ' + response.status);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('📊 Données JSON reçues:', data);
+                    console.log('📊 Nombre de prix:', data.prices ? data.prices.length : 0);
+                    
+                    if (data.prices && Array.isArray(data.prices) && data.prices.length > 0) {
+                        console.log('✅ Appel de updatePricesList avec', data.prices.length, 'prix');
+                        try {
+                            updatePricesList(data.prices);
+                            updateLastUpdateTime();
+                            console.log('✅ Prix affichés avec succès!');
+                        } catch(e) {
+                            console.error('❌ Erreur dans updatePricesList:', e);
+                            container.innerHTML = '<div style="text-align: center; color: var(--danger); padding: 40px;"><i class="fas fa-exclamation-circle"></i> Erreur d\'affichage: ' + e.message + '<br><button onclick="forceLoadPrices()" style="margin-top: 10px; padding: 8px 16px; background: var(--accent-primary); color: var(--bg-primary); border: none; border-radius: 8px; cursor: pointer;">Réessayer</button></div>';
+                        }
+                    } else {
+                        console.warn('⚠️ Aucun prix dans la réponse. Données:', data);
+                        container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px;"><i class="fas fa-exclamation-triangle"></i> Aucun prix disponible dans la réponse.<br><button onclick="forceLoadPrices()" style="margin-top: 10px; padding: 8px 16px; background: var(--accent-primary); color: var(--bg-primary); border: none; border-radius: 8px; cursor: pointer;">Réessayer</button></div>';
+                    }
+                })
+                .catch(err => {
+                    clearTimeout(timeoutId);
+                    console.error('❌ Erreur chargement:', err);
+                    container.innerHTML = '<div style="text-align: center; color: var(--danger); padding: 40px;"><i class="fas fa-exclamation-circle"></i> Erreur: ' + err.message + '<br><small>Vérifiez la console pour plus de détails</small><br><button onclick="forceLoadPrices()" style="margin-top: 10px; padding: 8px 16px; background: var(--accent-primary); color: var(--bg-primary); border: none; border-radius: 8px; cursor: pointer;">Réessayer</button></div>';
+                });
+        }
+        
+        // Exposer forceLoadPrices globalement
+        window.forceLoadPrices = forceLoadPrices;
+        
+        // Charger les données au démarrage - VERSION AGRESSIVE
+        console.log('🚀 Initialisation du dashboard π-FI...');
+        
+        function initDashboard() {
+            console.log('✅ DOM prêt - Initialisation du dashboard');
+            const pricesList = document.getElementById('prices-list');
+            if (!pricesList) {
+                console.error('❌ Élément prices-list non trouvé! Réessai dans 200ms...');
+                setTimeout(initDashboard, 200);
+                return;
+            }
+            
+            console.log('📥 Chargement automatique des prix...');
+            
+            // FORCER le chargement immédiatement
+            if (typeof loadPricesDirectly === 'function') {
+                try {
+                loadPricesDirectly();
+                } catch(e) {
+                    console.error('Erreur loadPricesDirectly:', e);
+                    forceLoadPrices();
+                }
+            } else {
+                forceLoadPrices();
+            }
+        }
+        
+        // CHARGEMENT IMMÉDIAT ET MULTIPLE - GARANTIR QUE ÇA FONCTIONNE
+        function startLoading() {
+            console.log('🚀 Démarrage du chargement...');
+            const container = document.getElementById('prices-list');
+            if (container) {
+                // Vérifier si déjà chargé
+                if (container.innerHTML.trim() !== '' && 
+                    !container.innerHTML.includes('Chargement') &&
+                    !container.innerHTML.includes('Aucun prix') &&
+                    !container.innerHTML.includes('Erreur')) {
+                    console.log('✅ Prix déjà chargés');
+                    return;
+                }
+                // Forcer le chargement
+                forceLoadPrices();
+            } else {
+                console.log('⏳ Container pas encore prêt, réessai...');
+                setTimeout(startLoading, 100);
+            }
+        }
+        
+        // Attendre que le DOM soit chargé
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                console.log('📄 DOMContentLoaded déclenché');
+                setupFilters();
+                setTimeout(startLoading, 50);
+            });
+        } else {
+            console.log('📄 DOM déjà chargé');
+            setupFilters();
+            setTimeout(startLoading, 50);
+        }
+        
+        // Appel direct immédiat
+        setTimeout(startLoading, 100);
+        
+        // Également au chargement complet
+        window.addEventListener('load', function() {
+            console.log('🎉 Page chargée complètement');
+            setTimeout(startLoading, 200);
+        });
+        
+        // Actualiser toutes les 10 secondes automatiquement
         setInterval(() => {
-            loadData();
-            refreshPrices();
-        }, 30000);
+                        if (typeof loadPricesDirectly === 'function') {
+                            loadPricesDirectly();
+                        } else {
+                forceLoadPrices();
+            }
+        }, 10000);
+        
+        // FORCER le chargement plusieurs fois pour être sûr
+        setTimeout(startLoading, 300);
+        setTimeout(startLoading, 600);
+        setTimeout(startLoading, 1000);
         
         // Mettre à jour l'heure toutes les secondes
-        setInterval(updateLastUpdateTime, 1000);
+        if (typeof updateLastUpdateTime === 'function') {
+            setInterval(updateLastUpdateTime, 1000);
+        }
+        
+        // Mettre à jour l'heure du serveur
+        function updateServerTime() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+            const serverTimeEl = document.getElementById('server-time');
+            if (serverTimeEl) {
+                serverTimeEl.textContent = timeStr;
+            }
+        }
+        setInterval(updateServerTime, 1000);
+        updateServerTime();
+        
+        // Vérifier la connexion
+        function checkConnection() {
+            const statusDot = document.getElementById('connection-status');
+            const connectionText = document.getElementById('connection-text');
+            
+            fetch('/api/prices?t=' + Date.now())
+                .then(response => {
+                    if (response.ok) {
+                        if (statusDot) {
+                            statusDot.style.background = '#4FFFA3';
+                            statusDot.style.boxShadow = '0 0 10px #4FFFA3';
+                        }
+                        if (connectionText) {
+                            connectionText.textContent = 'Connecté';
+                            connectionText.style.color = '#4FFFA3';
+                        }
+                    } else {
+                        throw new Error('Erreur HTTP');
+                    }
+                })
+                .catch(error => {
+                    if (statusDot) {
+                        statusDot.style.background = '#ef4444';
+                        statusDot.style.boxShadow = '0 0 10px #ef4444';
+                    }
+                    if (connectionText) {
+                        connectionText.textContent = 'Déconnecté';
+                        connectionText.style.color = '#ef4444';
+                    }
+                });
+        }
+        setInterval(checkConnection, 30000); // Vérifier toutes les 30 secondes
+        checkConnection();
+        
+        // ============================================
+        // CONFIGURATION DES FILTRES ET RECHERCHE
+        // ============================================
+        function setupFilters() {
+            console.log('🔧 Configuration des filtres...');
+            const searchInput = document.getElementById('search-crypto');
+            const sortSelect = document.getElementById('sort-crypto');
+            
+            if (searchInput) {
+                // Créer une nouvelle fonction handler pour éviter les doublons
+                const searchHandler = function() {
+                    console.log('🔍 Recherche:', this.value);
+                    if (typeof applyFiltersAndSort === 'function') {
+                        applyFiltersAndSort();
+                    }
+                };
+                // Retirer les anciens listeners
+                searchInput.removeEventListener('input', searchHandler);
+                searchInput.removeEventListener('keyup', searchHandler);
+                // Ajouter les nouveaux listeners
+                searchInput.addEventListener('input', searchHandler);
+                searchInput.addEventListener('keyup', searchHandler);
+                console.log('✅ Listener recherche attaché');
+                } else {
+                console.error('❌ search-crypto non trouvé');
+            }
+            
+            if (sortSelect) {
+                const sortHandler = function() {
+                    console.log('🔄 Tri changé:', this.value);
+                    if (typeof applyFiltersAndSort === 'function') {
+                        applyFiltersAndSort();
+                    }
+                };
+                sortSelect.removeEventListener('change', sortHandler);
+                sortSelect.addEventListener('change', sortHandler);
+                console.log('✅ Listener tri attaché');
+            } else {
+                console.error('❌ sort-crypto non trouvé');
+            }
+        }
+        
+        // ============================================
+        // SYSTÈME DE FAVORIS (localStorage)
+        // ============================================
+        function getFavorites() {
+            try {
+                const favs = localStorage.getItem('pi-fi-favorites');
+                return favs ? JSON.parse(favs) : [];
+            } catch(e) {
+                return [];
+            }
+        }
+        
+        function saveFavorites(favorites) {
+            try {
+                localStorage.setItem('pi-fi-favorites', JSON.stringify(favorites));
+                updateFavoritesCount();
+                updateFavoriteButtons();
+            } catch(e) {
+                console.error('Erreur sauvegarde favoris:', e);
+            }
+        }
+        
+        function toggleFavorite(symbol) {
+            if (!symbol) return;
+            const favorites = getFavorites();
+            const index = favorites.indexOf(symbol);
+            
+            if (index > -1) {
+                favorites.splice(index, 1);
+                showNotification('Favori retiré: ' + symbol, 'info');
+            } else {
+                favorites.push(symbol);
+                showNotification('Ajouté aux favoris: ' + symbol, 'success');
+            }
+            
+            saveFavorites(favorites);
+            applyFiltersAndSort();
+        }
+        
+        function isFavorite(symbol) {
+            return getFavorites().includes(symbol);
+        }
+        
+        function updateFavoritesCount() {
+            const count = getFavorites().length;
+            const countEl = document.getElementById('favorites-count');
+            if (countEl) countEl.textContent = count;
+        }
+        
+        function updateFavoriteButtons() {
+            const favorites = getFavorites();
+            document.querySelectorAll('[data-symbol]').forEach(btn => {
+                const symbol = btn.getAttribute('data-symbol');
+                const icon = btn.querySelector('i');
+                if (icon && favorites.includes(symbol)) {
+                    icon.className = 'fas fa-star';
+                    icon.style.color = '#FFD700';
+                } else if (icon) {
+                    icon.className = 'far fa-star';
+                    icon.style.color = '';
+                }
+            });
+            
+            // Mettre à jour le bouton dans le modal
+            const favoriteBtn = document.getElementById('favorite-btn');
+            if (favoriteBtn && currentSymbol) {
+                const icon = favoriteBtn.querySelector('i');
+                if (isFavorite(currentSymbol)) {
+                    icon.className = 'fas fa-star';
+                    favoriteBtn.innerHTML = '<i class="fas fa-star"></i> Retirer des Favoris';
+                } else {
+                    icon.className = 'far fa-star';
+                    favoriteBtn.innerHTML = '<i class="far fa-star"></i> Ajouter aux Favoris';
+                }
+            }
+        }
+        
+        function toggleFavoritesView() {
+            const sortSelect = document.getElementById('sort-crypto');
+            if (sortSelect) {
+                if (sortSelect.value === 'favorites') {
+                    sortSelect.value = 'symbol';
+                } else {
+                    sortSelect.value = 'favorites';
+                }
+                applyFiltersAndSort();
+            }
+        }
+        
+        // ============================================
+        // SYSTÈME D'ALERTES DE PRIX
+        // ============================================
+        function getPriceAlerts() {
+            try {
+                const alerts = localStorage.getItem('pi-fi-alerts');
+                return alerts ? JSON.parse(alerts) : [];
+            } catch(e) {
+                return [];
+            }
+        }
+        
+        function savePriceAlerts(alerts) {
+            try {
+                localStorage.setItem('pi-fi-alerts', JSON.stringify(alerts));
+            } catch(e) {
+                console.error('Erreur sauvegarde alertes:', e);
+            }
+        }
+        
+        function setPriceAlert(symbol) {
+            // Ouvrir le modal d'alertes avec la crypto pré-sélectionnée
+            openAlertsModal();
+            setTimeout(() => {
+                const select = document.getElementById('alert-crypto-select');
+                if (select && symbol) {
+                    select.value = symbol;
+                }
+            }, 100);
+        }
+        
+        function openAlertsModal() {
+            document.getElementById('alertsModal').classList.add('active');
+            populateAlertsSelect();
+            displayAlerts();
+        }
+        
+        function closeAlertsModal() {
+            document.getElementById('alertsModal').classList.remove('active');
+        }
+        
+        function populateAlertsSelect() {
+            const select = document.getElementById('alert-crypto-select');
+            if (!select || !window.allPrices) return;
+            
+            const currentValue = select.value;
+            select.innerHTML = '';
+            
+            window.allPrices.forEach(token => {
+                const option = document.createElement('option');
+                option.value = token.symbol;
+                option.textContent = `${token.symbol} - ${token.name}`;
+                select.appendChild(option);
+            });
+            
+            if (currentValue) select.value = currentValue;
+        }
+        
+        function createAlert() {
+            const symbol = document.getElementById('alert-crypto-select').value;
+            const type = document.getElementById('alert-type-select').value;
+            const value = parseFloat(document.getElementById('alert-value-input').value);
+            
+            if (!symbol || !value || isNaN(value)) {
+                showNotification('Veuillez remplir tous les champs', 'error');
+                return;
+            }
+            
+            const alerts = getPriceAlerts();
+            const alertId = Date.now();
+            
+            alerts.push({
+                id: alertId,
+                symbol: symbol,
+                type: type,
+                value: value,
+                active: true,
+                createdAt: new Date().toISOString(),
+                triggered: false
+            });
+            
+            savePriceAlerts(alerts);
+            showNotification(`Alerte créée pour ${symbol}`, 'success');
+            
+            // Réinitialiser le formulaire
+            document.getElementById('alert-value-input').value = '';
+            
+            // Rafraîchir l'affichage
+            displayAlerts();
+            updateAlertsCount();
+            
+            // Demander permission pour les notifications
+            if (Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+        }
+        
+        function displayAlerts() {
+            const alerts = getPriceAlerts();
+            const container = document.getElementById('alerts-list');
+            if (!container) return;
+            
+            if (alerts.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px;"><i class="far fa-bell"></i> Aucune alerte active</div>';
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            alerts.forEach(alert => {
+                const alertDiv = document.createElement('div');
+                alertDiv.style.cssText = 'padding: 15px; margin-bottom: 10px; background: rgba(0, 175, 255, 0.1); border-radius: 8px; border: 1px solid rgba(0, 175, 255, 0.2); display: flex; justify-content: space-between; align-items: center;';
+                
+                const crypto = window.allPrices?.find(p => p.symbol === alert.symbol);
+                const currentPrice = crypto ? parseFloat(crypto.price) : 0;
+                
+                let alertText = '';
+                let statusColor = '#4FFFA3';
+                
+                if (alert.type === 'above') {
+                    alertText = `${alert.symbol}: Alerte si prix ≥ $${alert.value.toFixed(8)}`;
+                    statusColor = currentPrice >= alert.value ? '#ef4444' : '#4FFFA3';
+                } else if (alert.type === 'below') {
+                    alertText = `${alert.symbol}: Alerte si prix ≤ $${alert.value.toFixed(8)}`;
+                    statusColor = currentPrice <= alert.value ? '#ef4444' : '#4FFFA3';
+                } else if (alert.type === 'change') {
+                    alertText = `${alert.symbol}: Alerte si variation ≥ ${alert.value}%`;
+                    const change = crypto ? parseFloat(crypto.change_24h) : 0;
+                    statusColor = Math.abs(change) >= Math.abs(alert.value) ? '#ef4444' : '#4FFFA3';
+                }
+                
+                alertDiv.innerHTML = `
+                    <div style="flex: 1;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                            <span style="width: 8px; height: 8px; background: ${statusColor}; border-radius: 50%; display: inline-block;"></span>
+                            <strong style="color: #F5F9FF;">${alertText}</strong>
+                        </div>
+                        <div style="font-size: 0.85em; color: var(--text-secondary);">
+                            Prix actuel: $${currentPrice.toLocaleString('fr-FR', {maximumFractionDigits: 8})}
+                            ${crypto ? ` | Variation 24h: ${crypto.change_24h >= 0 ? '+' : ''}${crypto.change_24h.toFixed(2)}%` : ''}
+                        </div>
+                    </div>
+                    <button onclick="if(typeof window.deleteAlert === 'function') window.deleteAlert(${alert.id}); else if(typeof deleteAlert === 'function') deleteAlert(${alert.id});" style="padding: 8px 15px; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 6px; color: #ef4444; cursor: pointer; font-size: 0.85em;">
+                        <i class="fas fa-trash"></i> Supprimer
+                    </button>
+                `;
+                
+                container.appendChild(alertDiv);
+            });
+        }
+        
+        function deleteAlert(alertId) {
+            const alerts = getPriceAlerts();
+            const filtered = alerts.filter(a => a.id !== alertId);
+            savePriceAlerts(filtered);
+            displayAlerts();
+            updateAlertsCount();
+            showNotification('Alerte supprimée', 'success');
+        }
+        
+        function updateAlertsCount() {
+            const alerts = getPriceAlerts();
+            const count = alerts.filter(a => a.active).length;
+            const countEl = document.getElementById('alerts-count');
+            const badgeEl = document.getElementById('alerts-badge');
+            
+            if (countEl) countEl.textContent = count;
+            if (badgeEl) badgeEl.style.display = count > 0 ? 'flex' : 'none';
+        }
+        
+        function toggleNotifications(enabled) {
+            if (enabled && Notification.permission === 'default') {
+                Notification.requestPermission().then(permission => {
+                    if (permission !== 'granted') {
+                        document.getElementById('notifications-enabled').checked = false;
+                        showNotification('Les notifications ont été refusées', 'error');
+                    } else {
+                        showNotification('Notifications activées', 'success');
+                    }
+                });
+            } else if (enabled && Notification.permission === 'granted') {
+                showNotification('Notifications activées', 'success');
+            }
+        }
+        
+        function checkPriceAlerts() {
+            if (!window.allPrices) return;
+            
+            const alerts = getPriceAlerts();
+            const notificationsEnabled = document.getElementById('notifications-enabled')?.checked;
+            
+            if (!notificationsEnabled || Notification.permission !== 'granted') return;
+            
+            alerts.forEach(alert => {
+                if (!alert.active || alert.triggered) return;
+                
+                const crypto = window.allPrices.find(p => p.symbol === alert.symbol);
+                if (!crypto) return;
+                
+                const currentPrice = parseFloat(crypto.price);
+                const change24h = parseFloat(crypto.change_24h) || 0;
+                let shouldTrigger = false;
+                let message = '';
+                
+                if (alert.type === 'above' && currentPrice >= alert.value) {
+                    shouldTrigger = true;
+                    message = `🚀 ${alert.symbol} a atteint $${currentPrice.toFixed(8)}! (Objectif: $${alert.value.toFixed(8)})`;
+                } else if (alert.type === 'below' && currentPrice <= alert.value) {
+                    shouldTrigger = true;
+                    message = `📉 ${alert.symbol} est descendu à $${currentPrice.toFixed(8)}! (Objectif: $${alert.value.toFixed(8)})`;
+                } else if (alert.type === 'change' && Math.abs(change24h) >= Math.abs(alert.value)) {
+                    shouldTrigger = true;
+                    message = `⚡ ${alert.symbol} a varié de ${change24h >= 0 ? '+' : ''}${change24h.toFixed(2)}%! (Seuil: ${alert.value}%)`;
+                }
+                
+                if (shouldTrigger) {
+                    showBrowserNotification(`Alerte ${alert.symbol}`, message);
+                    alert.triggered = true;
+                    showNotification(message, 'success');
+                    
+                    // Mettre à jour le badge
+                    updateAlertsCount();
+                }
+            });
+            
+            // Supprimer les alertes déclenchées après 1 minute
+            const activeAlerts = alerts.filter(a => a.active && (!a.triggered || (Date.now() - new Date(a.createdAt).getTime()) < 60000));
+            savePriceAlerts(activeAlerts);
+            
+            // Rafraîchir l'affichage si le modal est ouvert
+            if (document.getElementById('alertsModal').classList.contains('active')) {
+                displayAlerts();
+            }
+        }
+        
+        // Vérifier les alertes toutes les 10 secondes
+        setInterval(checkPriceAlerts, 10000);
+        
+        // ============================================
+        // CONVERTISSEUR
+        // ============================================
+        function openConverterModal() {
+            document.getElementById('converterModal').classList.add('active');
+            populateCryptoSelects();
+            calculateConversion();
+        }
+        
+        function closeConverterModal() {
+            document.getElementById('converterModal').classList.remove('active');
+        }
+        
+        function populateCryptoSelects() {
+            console.log('📋 [populateCryptoSelects] Remplissage...');
+            if (!window.allPrices || !Array.isArray(window.allPrices) || window.allPrices.length === 0) {
+                console.warn('⚠️ Aucun prix disponible pour remplir les selects');
+                return;
+            }
+            
+            const selects = ['convert-from', 'calc-crypto', 'compare-crypto1', 'compare-crypto2'];
+            selects.forEach(selectId => {
+                const select = document.getElementById(selectId);
+                if (!select) {
+                    console.warn('⚠️ Select', selectId, 'non trouvé');
+                    return;
+                }
+                
+                const currentValue = select.value;
+                select.innerHTML = '<option value="">Sélectionner une crypto</option>';
+                
+                window.allPrices.forEach(token => {
+                    if (token && token.symbol && token.name) {
+                        const option = document.createElement('option');
+                        option.value = token.symbol;
+                        option.textContent = `${token.symbol} - ${token.name}`;
+                        select.appendChild(option);
+                    }
+                });
+                
+                if (currentValue) select.value = currentValue;
+            });
+            console.log('✅ [populateCryptoSelects]', window.allPrices.length, 'cryptos ajoutées');
+        }
+        
+        function swapConverter() {
+            const from = document.getElementById('convert-from').value;
+            const to = document.getElementById('convert-to').value;
+            document.getElementById('convert-from').value = to;
+            document.getElementById('convert-to').value = from;
+            calculateConversion();
+        }
+        
+        function calculateConversion() {
+            if (!window.allPrices) return;
+            
+            const from = document.getElementById('convert-from').value;
+            const to = document.getElementById('convert-to').value;
+            const amount = parseFloat(document.getElementById('convert-amount').value) || 0;
+            
+            if (!from || !to || amount <= 0) {
+                document.getElementById('convert-result').textContent = '--';
+                return;
+            }
+            
+            let fromPrice = 1;
+            let toPrice = 1;
+            
+            // Trouver le prix de la crypto "from"
+            if (from !== 'USD' && from !== 'EUR') {
+                const fromCrypto = window.allPrices.find(p => p.symbol === from);
+                if (fromCrypto) fromPrice = parseFloat(fromCrypto.price);
+            } else {
+                fromPrice = from === 'USD' ? 1 : 1.1; // Approximation EUR
+            }
+            
+            // Trouver le prix de la crypto "to"
+            if (to !== 'USD' && to !== 'EUR') {
+                const toCrypto = window.allPrices.find(p => p.symbol === to);
+                if (toCrypto) toPrice = parseFloat(toCrypto.price);
+            } else {
+                toPrice = to === 'USD' ? 1 : 1.1; // Approximation EUR
+            }
+            
+            const result = (amount * fromPrice) / toPrice;
+            const symbol = to === 'USD' ? '$' : to === 'EUR' ? '€' : to;
+            document.getElementById('convert-result').textContent = 
+                result.toLocaleString('fr-FR', {maximumFractionDigits: 8}) + ' ' + symbol;
+        }
+        
+        // ============================================
+        // CALCULATEUR DE PROFIT
+        // ============================================
+        function openCalculatorModal() {
+            document.getElementById('calculatorModal').classList.add('active');
+            populateCryptoSelects();
+            updateCalcPrice();
+        }
+        
+        function closeCalculatorModal() {
+            document.getElementById('calculatorModal').classList.remove('active');
+        }
+        
+        function updateCalcPrice() {
+            if (!window.allPrices) return;
+            const symbol = document.getElementById('calc-crypto').value;
+            const crypto = window.allPrices.find(p => p.symbol === symbol);
+            if (crypto) {
+                document.getElementById('calc-current-price').value = parseFloat(crypto.price).toFixed(8);
+                calculateProfit();
+            }
+        }
+        
+        function calculateProfit() {
+            const buyPrice = parseFloat(document.getElementById('calc-buy-price').value) || 0;
+            const currentPrice = parseFloat(document.getElementById('calc-current-price').value) || 0;
+            const quantity = parseFloat(document.getElementById('calc-quantity').value) || 0;
+            
+            if (buyPrice <= 0 || currentPrice <= 0 || quantity <= 0) {
+                document.getElementById('calc-profit').textContent = '$0.00';
+                document.getElementById('calc-percentage').textContent = '+0.00%';
+                return;
+            }
+            
+            const profit = (currentPrice - buyPrice) * quantity;
+            const percentage = ((currentPrice - buyPrice) / buyPrice) * 100;
+            
+            const profitEl = document.getElementById('calc-profit');
+            const percentageEl = document.getElementById('calc-percentage');
+            const resultEl = document.getElementById('calc-result');
+            
+            profitEl.textContent = '$' + profit.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            percentageEl.textContent = (percentage >= 0 ? '+' : '') + percentage.toFixed(2) + '%';
+            
+            if (profit >= 0) {
+                profitEl.style.color = '#4FFFA3';
+                percentageEl.style.color = '#4FFFA3';
+                resultEl.style.background = 'rgba(79, 255, 163, 0.1)';
+                resultEl.style.borderColor = 'rgba(79, 255, 163, 0.2)';
+            } else {
+                profitEl.style.color = '#ef4444';
+                percentageEl.style.color = '#ef4444';
+                resultEl.style.background = 'rgba(239, 68, 68, 0.1)';
+                resultEl.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+            }
+        }
+        
+        // ============================================
+        // COMPARAISON
+        // ============================================
+        function openCompareModal() {
+            document.getElementById('compareModal').classList.add('active');
+            populateCryptoSelects();
+            updateComparison();
+        }
+        
+        function closeCompareModal() {
+            document.getElementById('compareModal').classList.remove('active');
+        }
+        
+        function updateComparison() {
+            if (!window.allPrices) return;
+            
+            const symbol1 = document.getElementById('compare-crypto1').value;
+            const symbol2 = document.getElementById('compare-crypto2').value;
+            
+            const crypto1 = window.allPrices.find(p => p.symbol === symbol1);
+            const crypto2 = window.allPrices.find(p => p.symbol === symbol2);
+            
+            if (!crypto1 || !crypto2) return;
+            
+            const resultsEl = document.getElementById('compare-results');
+            resultsEl.innerHTML = `
+                <div style="padding: 20px; background: rgba(0, 175, 255, 0.1); border-radius: 8px; border: 1px solid rgba(0, 175, 255, 0.2);">
+                    <h3 style="color: #F5F9FF; margin-bottom: 15px;">${crypto1.symbol} - ${crypto1.name}</h3>
+                    <div style="margin-bottom: 10px;"><strong>Prix:</strong> $${parseFloat(crypto1.price).toLocaleString('fr-FR', {maximumFractionDigits: 8})}</div>
+                    <div style="margin-bottom: 10px;"><strong>Variation 24h:</strong> <span style="color: ${crypto1.change_24h >= 0 ? '#4FFFA3' : '#ef4444'}">${crypto1.change_24h >= 0 ? '+' : ''}${crypto1.change_24h.toFixed(2)}%</span></div>
+                    <div><strong>Volume:</strong> $${(crypto1.volume || 0).toLocaleString('fr-FR', {maximumFractionDigits: 0})}</div>
+                </div>
+                <div style="padding: 20px; background: rgba(79, 255, 163, 0.1); border-radius: 8px; border: 1px solid rgba(79, 255, 163, 0.2);">
+                    <h3 style="color: #F5F9FF; margin-bottom: 15px;">${crypto2.symbol} - ${crypto2.name}</h3>
+                    <div style="margin-bottom: 10px;"><strong>Prix:</strong> $${parseFloat(crypto2.price).toLocaleString('fr-FR', {maximumFractionDigits: 8})}</div>
+                    <div style="margin-bottom: 10px;"><strong>Variation 24h:</strong> <span style="color: ${crypto2.change_24h >= 0 ? '#4FFFA3' : '#ef4444'}">${crypto2.change_24h >= 0 ? '+' : ''}${crypto2.change_24h.toFixed(2)}%</span></div>
+                    <div><strong>Volume:</strong> $${(crypto2.volume || 0).toLocaleString('fr-FR', {maximumFractionDigits: 0})}</div>
+                </div>
+            `;
+        }
+        
+        // ============================================
+        // GUIDE/TUTORIEL
+        // ============================================
+        function showTutorial() {
+            document.getElementById('tutorialModal').classList.add('active');
+        }
+        
+        function closeTutorialModal() {
+            document.getElementById('tutorialModal').classList.remove('active');
+        }
+        
+        // ============================================
+        // PARTAGE
+        // ============================================
+        function shareCrypto(symbol) {
+            if (!symbol || !window.allPrices) return;
+            
+            const crypto = window.allPrices.find(p => p.symbol === symbol);
+            if (!crypto) return;
+            
+            const text = `${crypto.symbol} (${crypto.name}): $${parseFloat(crypto.price).toLocaleString('fr-FR', {maximumFractionDigits: 8})} | Variation 24h: ${crypto.change_24h >= 0 ? '+' : ''}${crypto.change_24h.toFixed(2)}% | Via π-FI Dashboard`;
+            const url = window.location.href;
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: `${crypto.symbol} - ${crypto.name}`,
+                    text: text,
+                    url: url
+                }).catch(err => console.log('Erreur partage:', err));
+            } else {
+                // Fallback: copier dans le presse-papier
+                navigator.clipboard.writeText(text + ' ' + url).then(() => {
+                    showNotification('Lien copié dans le presse-papier!', 'success');
+                });
+            }
+        }
+        
+        // ============================================
+        // NOTIFICATIONS
+        // ============================================
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 15px 20px;
+                background: ${type === 'success' ? 'rgba(79, 255, 163, 0.9)' : 'rgba(0, 175, 255, 0.9)'};
+                color: #F5F9FF;
+                border-radius: 8px;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+                z-index: 10000;
+                animation: slideInRight 0.3s ease;
+                max-width: 300px;
+            `;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOutRight 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+        
+        function showBrowserNotification(title, body) {
+            if (Notification.permission === 'granted') {
+                new Notification(title, {
+                    body: body,
+                    icon: '/logo',
+                    badge: '/logo'
+                });
+            }
+        }
+        
+        // Ajouter les animations CSS pour les notifications
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideInRight {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOutRight {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+            .tool-btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 15px rgba(0, 175, 255, 0.3);
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // EXPOSER TOUTES LES FONCTIONS GLOBALEMENT POUR LES BOUTONS ONCLICK
+        window.openConverterModal = openConverterModal;
+        window.closeConverterModal = closeConverterModal;
+        window.openCalculatorModal = openCalculatorModal;
+        window.closeCalculatorModal = closeCalculatorModal;
+        // Exposer toutes les fonctions avec vérifications
+        window.openCompareModal = function() {
+            console.log('⚖️ [window.openCompareModal] Ouverture...');
+            const modal = document.getElementById('compareModal');
+            if (modal) {
+                modal.classList.add('active');
+                setTimeout(() => {
+                    if (typeof populateCryptoSelects === 'function') {
+                        populateCryptoSelects();
+                    }
+                    if (typeof updateComparison === 'function') {
+                        updateComparison();
+                    }
+                }, 200);
+            }
+        };
+        window.closeCompareModal = closeCompareModal;
+        window.showTutorial = showTutorial;
+        window.closeTutorialModal = closeTutorialModal;
+        window.toggleFavorite = toggleFavorite;
+        window.toggleFavoritesView = toggleFavoritesView;
+        window.shareCrypto = shareCrypto;
+        window.setPriceAlert = setPriceAlert;
+        window.openAlertsModal = function() {
+            console.log('🔔 [window.openAlertsModal] Ouverture...');
+            const modal = document.getElementById('alertsModal');
+            if (modal) {
+                modal.classList.add('active');
+                setTimeout(() => {
+                    if (typeof populateAlertsSelect === 'function') {
+                        populateAlertsSelect();
+                    }
+                    if (typeof displayAlerts === 'function') {
+                        displayAlerts();
+                    }
+                }, 200);
+            }
+        };
+        window.closeAlertsModal = closeAlertsModal;
+        window.createAlert = createAlert;
+        window.deleteAlert = deleteAlert;
+        window.toggleNotifications = toggleNotifications;
+        window.swapConverter = swapConverter;
+        window.calculateConversion = calculateConversion;
+        window.updateCalcPrice = updateCalcPrice;
+        window.calculateProfit = calculateProfit;
+        window.updateComparison = updateComparison;
+        window.populateCryptoSelects = populateCryptoSelects;
+        window.populateAlertsSelect = populateAlertsSelect;
+        window.displayAlerts = displayAlerts;
+        // Exposer applyFiltersAndSort avec alias pour compatibilité
+        window._applyFiltersAndSort = applyFiltersAndSort;
+        window.applyFiltersAndSort = function() {
+            console.log('🔍 [applyFiltersAndSort] Appelée depuis exposition globale');
+            if (typeof window._applyFiltersAndSort === 'function') {
+                window._applyFiltersAndSort();
+            } else if (typeof applyFiltersAndSort === 'function') {
+                applyFiltersAndSort();
+            }
+        };
+        
+        window.setupFilters = setupFilters;
+        window.getFavorites = getFavorites;
+        window.isFavorite = isFavorite;
+        
+        // Réexposer openTradingModal et openCryptoModal pour être sûr
+        if (typeof openCryptoModal === 'function') {
+            window.openCryptoModal = openCryptoModal;
+            window.openTradingModal = function(symbol, name) {
+                console.log('📊 [window.openTradingModal] Ouverture pour', symbol, name);
+                openCryptoModal(symbol, name);
+            };
+            // Créer aussi des alias globaux
+            openCryptoModal = window.openCryptoModal;
+            openTradingModal = window.openTradingModal;
+            console.log('✅ openCryptoModal et openTradingModal exposés globalement');
+        } else {
+            console.error('❌ openCryptoModal n\'est pas une fonction! Type:', typeof openCryptoModal);
+        }
+        
+        console.log('✅ Toutes les fonctions exposées globalement');
+        
+        // ============================================
+        // SYSTÈME DE THÈME SOMBRE/CLAIR
+        // ============================================
+        function initTheme() {
+            const savedTheme = localStorage.getItem('pi-fi-theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            updateThemeUI(savedTheme);
+        }
+        
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('pi-fi-theme', newTheme);
+            updateThemeUI(newTheme);
+            showNotification(`Thème ${newTheme === 'dark' ? 'sombre' : 'clair'} activé`, 'success');
+        }
+        
+        function updateThemeUI(theme) {
+            const icon = document.getElementById('theme-icon');
+            const text = document.getElementById('theme-text');
+            if (icon) {
+                icon.className = theme === 'dark' ? 'fas fa-moon' : 'fas fa-sun';
+            }
+            if (text) {
+                text.textContent = theme === 'dark' ? 'Sombre' : 'Clair';
+            }
+        }
+        
+        window.toggleTheme = toggleTheme;
+        toggleTheme = window.toggleTheme;
+        
+        // Initialiser le thème au chargement
+        initTheme();
+        
+        // ============================================
+        // RACCOURCIS CLAVIER
+        // ============================================
+        document.addEventListener('keydown', function(e) {
+            // T pour toggle thème
+            if (e.key === 't' || e.key === 'T') {
+                if (!e.target.matches('input, textarea, select')) {
+                    e.preventDefault();
+                    toggleTheme();
+                }
+            }
+            // Escape pour fermer les modals
+            if (e.key === 'Escape') {
+                const activeModal = document.querySelector('.trading-modal.active');
+                if (activeModal) {
+                    const closeBtn = activeModal.querySelector('.close-modal');
+                    if (closeBtn) closeBtn.click();
+                }
+            }
+            // Ctrl/Cmd + K pour recherche
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                const searchInput = document.getElementById('search-crypto');
+                if (searchInput) {
+                    searchInput.focus();
+                    searchInput.select();
+                }
+            }
+            // Ctrl/Cmd + R pour refresh (mais ne pas empêcher le refresh par défaut)
+            // Ctrl/Cmd + F pour favoris
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f' && !e.target.matches('input, textarea')) {
+                e.preventDefault();
+                if (typeof toggleFavoritesView === 'function') {
+                    toggleFavoritesView();
+                }
+            }
+        });
+        
+        console.log('⌨️ Raccourcis clavier activés: T (thème), Esc (fermer), Ctrl+K (recherche), Ctrl+F (favoris)');
+        
+        // ============================================
+        // OPTIMISATIONS DE PERFORMANCE
+        // ============================================
+        // Debounce pour la recherche
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+        
+        // Lazy loading pour les images
+        if ('IntersectionObserver' in window) {
+            const imageObserver = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        if (img.dataset.src) {
+                            img.src = img.dataset.src;
+                            img.removeAttribute('data-src');
+                            observer.unobserve(img);
+                        }
+                    }
+                });
+            });
+            
+            document.querySelectorAll('img[data-src]').forEach(img => {
+                imageObserver.observe(img);
+            });
+        }
+        
+        // ============================================
+        // NOTIFICATIONS TOAST AMÉLIORÉES
+        // ============================================
+        const originalShowNotification = window.showNotification;
+        window.showNotification = function(message, type = 'info', duration = 3000) {
+            // Créer le conteneur de notifications s'il n'existe pas
+            let container = document.getElementById('notifications-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'notifications-container';
+                container.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    z-index: 10000;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                    pointer-events: none;
+                `;
+                document.body.appendChild(container);
+            }
+            
+            // Créer la notification
+            const notification = document.createElement('div');
+            const icons = {
+                success: '✓',
+                error: '✕',
+                warning: '⚠',
+                info: 'ℹ'
+            };
+            const colors = {
+                success: '#4FFFA3',
+                error: '#ef4444',
+                warning: '#f59e0b',
+                info: '#00AFFF'
+            };
+            
+            notification.style.cssText = `
+                background: rgba(2, 9, 21, 0.95);
+                border: 1px solid ${colors[type] || colors.info};
+                border-left: 4px solid ${colors[type] || colors.info};
+                color: #F5F9FF;
+                padding: 15px 20px;
+                border-radius: 8px;
+                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+                min-width: 300px;
+                max-width: 400px;
+                animation: slideInRight 0.3s ease-out;
+                pointer-events: auto;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                font-size: 0.95em;
+            `;
+            
+            notification.innerHTML = `
+                <span style="font-size: 1.2em; color: ${colors[type] || colors.info};">${icons[type] || icons.info}</span>
+                <span style="flex: 1;">${message}</span>
+                <button onclick="this.parentElement.remove()" style="background: none; border: none; color: #5A6C81; cursor: pointer; font-size: 1.2em; padding: 0; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;">&times;</button>
+            `;
+            
+            container.appendChild(notification);
+            
+            // Auto-suppression
+            setTimeout(() => {
+                notification.style.animation = 'slideOutRight 0.3s ease-out';
+                setTimeout(() => {
+                    if (notification.parentElement) {
+                        notification.remove();
+                    }
+                }, 300);
+            }, duration);
+        };
+        
+        // ============================================
+        // AMÉLIORATION RESPONSIVE
+        // ============================================
+        function handleResize() {
+            const isMobile = window.innerWidth < 768;
+            document.body.classList.toggle('mobile-view', isMobile);
+            
+            // Ajuster les modals sur mobile
+            const modals = document.querySelectorAll('.trading-modal-content');
+            modals.forEach(modal => {
+                if (isMobile) {
+                    modal.style.maxWidth = '95%';
+                    modal.style.maxHeight = '90vh';
+                    modal.style.overflowY = 'auto';
+                } else {
+                    modal.style.maxWidth = '';
+                    modal.style.maxHeight = '';
+                }
+            });
+        }
+        
+        window.addEventListener('resize', debounce(handleResize, 250));
+        handleResize(); // Appel initial
+        
+        // ============================================
+        // INDICATEUR DE PERFORMANCE
+        // ============================================
+        if ('performance' in window) {
+            window.addEventListener('load', () => {
+                setTimeout(() => {
+                    const perfData = performance.timing;
+                    const loadTime = perfData.loadEventEnd - perfData.navigationStart;
+                    console.log(`⚡ Temps de chargement: ${loadTime}ms`);
+                    if (loadTime > 3000) {
+                        console.warn('⚠️ Temps de chargement élevé, considérez optimiser les ressources');
+                    }
+                }, 0);
+            });
+        }
+        
+        console.log('✅ Améliorations chargées: Thème, Raccourcis, Performance, Notifications');
+        
+        // FORCER l'initialisation immédiate des filtres
+        (function initFiltersNow() {
+            if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                setTimeout(() => {
+                    setupFilters();
+                    console.log('✅ Filtres initialisés');
+                }, 500);
+            } else {
+                document.addEventListener('DOMContentLoaded', function() {
+                    setTimeout(() => {
+                        setupFilters();
+                        console.log('✅ Filtres initialisés (DOMContentLoaded)');
+                    }, 500);
+                });
+            }
+        })();
+        
+        // Initialiser les favoris et alertes au chargement
+        updateFavoritesCount();
+        updateAlertsCount();
+        
+        // Vérifier les alertes toutes les 5 secondes
+        setInterval(checkPriceAlerts, 5000);
+        
+        // Mettre à jour les selects quand les prix sont chargés
+        const originalUpdatePricesList = window.updatePricesList;
+        window.updatePricesList = function(prices) {
+            if (originalUpdatePricesList) {
+                originalUpdatePricesList(prices);
+            }
+            populateCryptoSelects();
+            updateFavoriteButtons();
+            // NE PAS réappliquer les filtres automatiquement car ça cause des duplications
+            // Les filtres seront appliqués seulement si l'utilisateur recherche ou trie
+        };
+        
+        // S'assurer que setupFilters est appelé après le chargement du DOM
+        function initializeAll() {
+            console.log('🚀 Initialisation complète...');
+            setupFilters();
+            updateFavoritesCount();
+            
+            // Réappliquer les filtres si nécessaire
+            const searchInput = document.getElementById('search-crypto');
+            const sortSelect = document.getElementById('sort-crypto');
+            if (searchInput && searchInput.value) {
+                applyFiltersAndSort();
+            }
+            if (sortSelect && sortSelect.value !== 'symbol') {
+                applyFiltersAndSort();
+            }
+        }
+        
+        // Appeler après le chargement
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeAll);
+        } else {
+            setTimeout(initializeAll, 100);
+        }
+        
+        // Également au chargement complet de la page
+        window.addEventListener('load', function() {
+            setTimeout(initializeAll, 200);
+        });
+        
+        // ============================================
+        // PORTEFEUILLE VIRTUEL - FONCTIONNALITÉ PREMIUM
+        // ============================================
+        function getPortfolio() {
+            const stored = localStorage.getItem('pi-fi-portfolio');
+            return stored ? JSON.parse(stored) : [];
+        }
+        
+        function savePortfolio(portfolio) {
+            localStorage.setItem('pi-fi-portfolio', JSON.stringify(portfolio));
+        }
+        
+        function openPortfolioModal() {
+            document.getElementById('portfolioModal').classList.add('active');
+            updatePortfolioDisplay();
+            populatePortfolioCryptoSelect();
+        }
+        
+        function closePortfolioModal() {
+            document.getElementById('portfolioModal').classList.remove('active');
+        }
+        
+        function addToPortfolio() {
+            const symbol = document.getElementById('portfolio-crypto').value;
+            const quantity = parseFloat(document.getElementById('portfolio-quantity').value);
+            const buyPrice = parseFloat(document.getElementById('portfolio-buy-price').value);
+            
+            if (!symbol || !quantity || !buyPrice) {
+                showNotification('Veuillez remplir tous les champs', 'error');
+                return;
+            }
+            
+            const portfolio = getPortfolio();
+            const existing = portfolio.findIndex(p => p.symbol === symbol);
+            
+            if (existing >= 0) {
+                // Mettre à jour l'existant
+                portfolio[existing].quantity += quantity;
+                portfolio[existing].totalCost += quantity * buyPrice;
+                portfolio[existing].avgBuyPrice = portfolio[existing].totalCost / portfolio[existing].quantity;
+            } else {
+                // Ajouter nouveau
+                portfolio.push({
+                    symbol: symbol,
+                    quantity: quantity,
+                    buyPrice: buyPrice,
+                    avgBuyPrice: buyPrice,
+                    totalCost: quantity * buyPrice
+                });
+            }
+            
+            savePortfolio(portfolio);
+            updatePortfolioDisplay();
+            
+            // Réinitialiser les champs
+            document.getElementById('portfolio-quantity').value = '';
+            document.getElementById('portfolio-buy-price').value = '';
+            
+            showNotification('Actif ajouté au portefeuille!', 'success');
+        }
+        
+        function updatePortfolioDisplay() {
+            const portfolio = getPortfolio();
+            const listEl = document.getElementById('portfolio-list');
+            
+            if (portfolio.length === 0) {
+                listEl.innerHTML = `
+                    <div style="text-align: center; color: var(--text-secondary); padding: 40px;">
+                        <i class="fas fa-wallet" style="font-size: 3em; opacity: 0.3; margin-bottom: 15px;"></i>
+                        <p>Aucun actif dans votre portefeuille</p>
+                        <p style="font-size: 0.9em; margin-top: 10px;">Ajoutez vos cryptos pour suivre vos gains et pertes</p>
+                    </div>
+                `;
+                document.getElementById('portfolio-total').textContent = '$0.00';
+                document.getElementById('portfolio-profit').textContent = '$0.00';
+                document.getElementById('portfolio-count').textContent = '0';
+                return;
+            }
+            
+            let totalValue = 0;
+            let totalProfit = 0;
+            
+            listEl.innerHTML = portfolio.map(item => {
+                const crypto = window.allPrices?.find(p => p.symbol === item.symbol);
+                const currentPrice = crypto ? parseFloat(crypto.price) : 0;
+                const currentValue = item.quantity * currentPrice;
+                const profit = currentValue - item.totalCost;
+                const profitPercent = item.totalCost > 0 ? ((profit / item.totalCost) * 100) : 0;
+                
+                totalValue += currentValue;
+                totalProfit += profit;
+                
+                return `
+                    <div style="padding: 15px; background: rgba(0, 175, 255, 0.05); border-radius: 8px; border: 1px solid rgba(161, 227, 255, 0.2); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 700; color: #F5F9FF; margin-bottom: 5px;">${item.symbol}</div>
+                            <div style="font-size: 0.85em; color: var(--text-secondary);">
+                                ${item.quantity.toFixed(8)} @ $${item.avgBuyPrice.toFixed(2)} avg
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-weight: 700; color: #F5F9FF; margin-bottom: 5px;">$${currentValue.toLocaleString('fr-FR', {maximumFractionDigits: 2})}</div>
+                            <div style="font-size: 0.85em; color: ${profit >= 0 ? '#4FFFA3' : '#ef4444'};">
+                                ${profit >= 0 ? '+' : ''}$${profit.toLocaleString('fr-FR', {maximumFractionDigits: 2})} (${profitPercent >= 0 ? '+' : ''}${profitPercent.toFixed(2)}%)
+                            </div>
+                        </div>
+                        <button onclick="removeFromPortfolio('${item.symbol}')" style="margin-left: 15px; padding: 8px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; color: #ef4444; cursor: pointer;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+            
+            document.getElementById('portfolio-total').textContent = '$' + totalValue.toLocaleString('fr-FR', {maximumFractionDigits: 2});
+            document.getElementById('portfolio-profit').textContent = '$' + totalProfit.toLocaleString('fr-FR', {maximumFractionDigits: 2});
+            document.getElementById('portfolio-profit').style.color = totalProfit >= 0 ? '#4FFFA3' : '#ef4444';
+            document.getElementById('portfolio-count').textContent = portfolio.length;
+        }
+        
+        function removeFromPortfolio(symbol) {
+            const portfolio = getPortfolio();
+            const filtered = portfolio.filter(p => p.symbol !== symbol);
+            savePortfolio(filtered);
+            updatePortfolioDisplay();
+            showNotification('Actif retiré du portefeuille', 'success');
+        }
+        
+        function populatePortfolioCryptoSelect() {
+            const select = document.getElementById('portfolio-crypto');
+            if (!select || !window.allPrices) return;
+            
+            select.innerHTML = '<option value="">Sélectionner une crypto</option>';
+            window.allPrices.forEach(crypto => {
+                const option = document.createElement('option');
+                option.value = crypto.symbol;
+                option.textContent = `${crypto.symbol} - ${crypto.name}`;
+                select.appendChild(option);
+            });
+        }
+        
+        // Mettre à jour le portefeuille toutes les 5 secondes
+        setInterval(() => {
+            if (document.getElementById('portfolioModal')?.classList.contains('active')) {
+                updatePortfolioDisplay();
+            }
+        }, 5000);
+        
+        // ============================================
+        // EXPORT DE DONNÉES - FONCTIONNALITÉ PREMIUM
+        // ============================================
+        function exportData(format = 'csv') {
+            if (!window.allPrices || window.allPrices.length === 0) {
+                showNotification('Aucune donnée à exporter', 'error');
+                return;
+            }
+            
+            if (format === 'csv') {
+                const headers = ['Symbole', 'Nom', 'Prix (USD)', 'Variation 24h (%)', 'Volume 24h'];
+                const rows = window.allPrices.map(crypto => [
+                    crypto.symbol,
+                    crypto.name,
+                    parseFloat(crypto.price).toFixed(8),
+                    parseFloat(crypto.change_24h).toFixed(2),
+                    (crypto.volume || 0).toFixed(2)
+                ]);
+                
+                const csvContent = [
+                    headers.join(','),
+                    ...rows.map(row => row.join(','))
+                ].join('\\n');
+                
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', `pi-fi-crypto-data-${new Date().toISOString().split('T')[0]}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                showNotification('Données exportées en CSV!', 'success');
+            }
+        }
+        
+        // Exposer les fonctions globalement
+        window.openPortfolioModal = openPortfolioModal;
+        window.closePortfolioModal = closePortfolioModal;
+        window.addToPortfolio = addToPortfolio;
+        window.removeFromPortfolio = removeFromPortfolio;
+        window.exportData = exportData;
+        
+        // Ajouter l'animation pulse pour le badge Premium
+        const premiumStyle = document.createElement('style');
+        premiumStyle.textContent = `
+            @keyframes pulse {
+                0%, 100% { transform: scale(1); opacity: 1; }
+                50% { transform: scale(1.05); opacity: 0.9; }
+            }
+        `;
+        document.head.appendChild(premiumStyle);
     </script>
 </body>
 </html>
@@ -706,6 +4681,54 @@ def index():
     """Page principale du dashboard"""
     return render_template_string(HTML_TEMPLATE)
 
+@app.route('/logo')
+def logo():
+    """Route pour servir le logo"""
+    from flask import send_from_directory, send_file
+    import os
+    
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    from flask import make_response
+    
+    # Essayer d'abord le fichier original à la racine
+    original_logo = os.path.join(base_dir, 'LOGO PI&FI.png')
+    if os.path.exists(original_logo):
+        print(f"[LOGO] ✅ Utilisation du logo original: {original_logo}")
+        response = make_response(send_file(original_logo, mimetype='image/png'))
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
+    
+    # Sinon essayer le dossier static
+    static_logo = os.path.join(base_dir, 'static', 'pi-fi-logo.png')
+    if os.path.exists(static_logo):
+        print(f"[LOGO] ✅ Utilisation du logo static: {static_logo}")
+        response = make_response(send_file(static_logo, mimetype='image/png'))
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
+    
+    # Sinon utiliser branding/assets/logo
+    branding_logo = os.path.join(base_dir, 'branding', 'assets', 'logo', 'pi-fi-logo.png')
+    if os.path.exists(branding_logo):
+        print(f"[LOGO] ✅ Utilisation du logo branding: {branding_logo}")
+        response = make_response(send_file(branding_logo, mimetype='image/png'))
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
+    
+    # Si aucun logo trouvé, retourner une erreur 404
+    print(f"[LOGO] ❌ ERREUR: Aucun logo trouvé!")
+    print(f"[LOGO] Cherché dans: {original_logo}")
+    print(f"[LOGO] Cherché dans: {static_logo}")
+    print(f"[LOGO] Cherché dans: {branding_logo}")
+    from flask import abort
+    abort(404)
+
 @app.route('/dashboard')
 def dashboard_redirect():
     """Redirection pour compatibilité avec l'ancienne URL"""
@@ -714,7 +4737,12 @@ def dashboard_redirect():
 @app.route('/health')
 def health():
     """Endpoint de santé pour vérifier que le serveur fonctionne"""
-    return jsonify({'status': 'ok', 'service': 'dashboard'})
+    return jsonify({'status': 'ok', 'service': 'dashboard', 'brand': 'π-FI'})
+
+@app.errorhandler(404)
+def not_found(error):
+    """Gestion des erreurs 404"""
+    return render_template_string(HTML_TEMPLATE), 404
 
 @app.route('/api/data')
 def api_data():
@@ -728,9 +4756,229 @@ def api_data():
         'price_history': shared_data['price_history']
     })
 
+@app.route('/api/trading/<symbol>')
+def api_trading(symbol):
+    """API pour récupérer les données de trading en direct d'une crypto"""
+    try:
+        symbol = symbol.upper()
+        
+        # Mapping Binance
+        binance_mapping = {
+            'BTC': 'BTCUSDT', 'ETH': 'ETHUSDT', 'BNB': 'BNBUSDT', 'SOL': 'SOLUSDT',
+            'ADA': 'ADAUSDT', 'DOT': 'DOTUSDT', 'MATIC': 'MATICUSDT', 'AVAX': 'AVAXUSDT',
+            'LINK': 'LINKUSDT', 'XRP': 'XRPUSDT', 'DOGE': 'DOGEUSDT', 'LTC': 'LTCUSDT',
+            'TRX': 'TRXUSDT', 'ATOM': 'ATOMUSDT', 'ALGO': 'ALGOUSDT', 'NEAR': 'NEARUSDT',
+            'FTM': 'FTMUSDT', 'MANA': 'MANAUSDT', 'SAND': 'SANDUSDT', 'AXS': 'AXSUSDT'
+        }
+        
+        # Essayer Binance d'abord
+        if symbol in binance_mapping:
+            try:
+                url = f"{BINANCE_API_URL}/ticker/24hr"
+                params = {'symbol': binance_mapping[symbol]}
+                response = requests.get(url, params=params, timeout=3)
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    # Récupérer l'historique des prix depuis shared_data
+                    price_history = []
+                    if symbol in shared_data['price_history']:
+                        price_history = shared_data['price_history'][symbol][-50:]  # Derniers 50 points
+                    
+                    return jsonify({
+                        'symbol': symbol,
+                        'price': float(data['lastPrice']),
+                        'change_24h': float(data['priceChangePercent']),
+                        'high_24h': float(data.get('highPrice', 0)),
+                        'low_24h': float(data.get('lowPrice', 0)),
+                        'volume_24h': float(data.get('quoteVolume', 0)),
+                        'price_history': price_history
+                    })
+            except Exception as e:
+                pass
+        
+        # Fallback CoinGecko
+        tokens_info = {
+            'BTC': 'bitcoin', 'ETH': 'ethereum', 'BNB': 'binancecoin', 'SOL': 'solana',
+            'ADA': 'cardano', 'DOT': 'polkadot', 'MATIC': 'matic-network', 'AVAX': 'avalanche-2',
+            'LINK': 'chainlink', 'XRP': 'ripple', 'DOGE': 'dogecoin', 'LTC': 'litecoin',
+            'TRX': 'tron', 'ATOM': 'cosmos', 'ALGO': 'algorand', 'NEAR': 'near-protocol',
+            'FTM': 'fantom', 'MANA': 'decentraland', 'SAND': 'the-sandbox', 'AXS': 'axie-infinity'
+        }
+        
+        if symbol in tokens_info:
+            try:
+                url = f"{COINGECKO_API_URL}/simple/price"
+                params = {
+                    'ids': tokens_info[symbol],
+                    'vs_currencies': 'usd',
+                    'include_24hr_change': 'true',
+                    'include_24hr_vol': 'true',
+                    'include_24hr_high': 'true',
+                    'include_24hr_low': 'true'
+                }
+                response = requests.get(url, params=params, timeout=3)
+                if response.status_code == 200:
+                    data = response.json()
+                    token_id = tokens_info[symbol]
+                    if token_id in data:
+                        token_data = data[token_id]
+                        
+                        price_history = []
+                        if symbol in shared_data['price_history']:
+                            price_history = shared_data['price_history'][symbol][-50:]
+                        
+                        return jsonify({
+                            'symbol': symbol,
+                            'price': token_data.get('usd', 0),
+                            'change_24h': token_data.get('usd_24h_change', 0),
+                            'high_24h': token_data.get('usd_24h_high', 0),
+                            'low_24h': token_data.get('usd_24h_low', 0),
+                            'volume_24h': 0,  # CoinGecko ne fournit pas toujours le volume
+                            'price_history': price_history
+                        })
+            except Exception as e:
+                pass
+        
+        return jsonify({'error': f'Token {symbol} non trouvé'}), 404
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/crypto/<symbol>')
+def api_crypto(symbol):
+    """API standardisée pour récupérer les données crypto (compatible avec toutes les structures)"""
+    try:
+        symbol = symbol.upper()
+        
+        # Mapping Binance
+        binance_mapping = {
+            'BTC': 'BTCUSDT', 'ETH': 'ETHUSDT', 'BNB': 'BNBUSDT', 'SOL': 'SOLUSDT',
+            'ADA': 'ADAUSDT', 'DOT': 'DOTUSDT', 'MATIC': 'MATICUSDT', 'AVAX': 'AVAXUSDT',
+            'LINK': 'LINKUSDT', 'XRP': 'XRPUSDT', 'DOGE': 'DOGEUSDT', 'LTC': 'LTCUSDT',
+            'TRX': 'TRXUSDT', 'ATOM': 'ATOMUSDT', 'ALGO': 'ALGOUSDT', 'NEAR': 'NEARUSDT',
+            'FTM': 'FTMUSDT', 'MANA': 'MANAUSDT', 'SAND': 'SANDUSDT', 'AXS': 'AXSUSDT'
+        }
+        
+        # Mapping noms complets
+        crypto_names = {
+            'BTC': 'Bitcoin', 'ETH': 'Ethereum', 'BNB': 'Binance Coin', 'SOL': 'Solana',
+            'ADA': 'Cardano', 'DOT': 'Polkadot', 'MATIC': 'Polygon', 'AVAX': 'Avalanche',
+            'LINK': 'Chainlink', 'XRP': 'Ripple', 'DOGE': 'Dogecoin', 'LTC': 'Litecoin',
+            'TRX': 'Tron', 'ATOM': 'Cosmos', 'ALGO': 'Algorand', 'NEAR': 'NEAR Protocol',
+            'FTM': 'Fantom', 'MANA': 'Decentraland', 'SAND': 'The Sandbox', 'AXS': 'Axie Infinity'
+        }
+        
+        price = None
+        change_24h = 0
+        high_24h = 0
+        low_24h = 0
+        volume_24h = 0
+        price_history = []
+        
+        # Essayer Binance d'abord
+        if symbol in binance_mapping:
+            try:
+                url = f"{BINANCE_API_URL}/ticker/24hr"
+                params = {'symbol': binance_mapping[symbol]}
+                response = requests.get(url, params=params, timeout=3)
+                if response.status_code == 200:
+                    data = response.json()
+                    price = float(data.get('lastPrice', 0))
+                    change_24h = float(data.get('priceChangePercent', 0))
+                    high_24h = float(data.get('highPrice', price))
+                    low_24h = float(data.get('lowPrice', price))
+                    volume_24h = float(data.get('quoteVolume', 0))
+                    
+                    # Récupérer l'historique depuis shared_data
+                    if symbol in shared_data['price_history']:
+                        price_history = shared_data['price_history'][symbol][-100:]  # Derniers 100 points
+            except Exception as e:
+                pass
+        
+        # Fallback CoinGecko
+        if price is None or price == 0:
+            tokens_info = {
+                'BTC': 'bitcoin', 'ETH': 'ethereum', 'BNB': 'binancecoin', 'SOL': 'solana',
+                'ADA': 'cardano', 'DOT': 'polkadot', 'MATIC': 'matic-network', 'AVAX': 'avalanche-2',
+                'LINK': 'chainlink', 'XRP': 'ripple', 'DOGE': 'dogecoin', 'LTC': 'litecoin',
+                'TRX': 'tron', 'ATOM': 'cosmos', 'ALGO': 'algorand', 'NEAR': 'near-protocol',
+                'FTM': 'fantom', 'MANA': 'decentraland', 'SAND': 'the-sandbox', 'AXS': 'axie-infinity'
+            }
+            
+            if symbol in tokens_info:
+                try:
+                    url = f"{COINGECKO_API_URL}/simple/price"
+                    params = {
+                        'ids': tokens_info[symbol],
+                        'vs_currencies': 'usd',
+                        'include_24hr_change': 'true',
+                        'include_24hr_vol': 'true',
+                        'include_24hr_high': 'true',
+                        'include_24hr_low': 'true'
+                    }
+                    response = requests.get(url, params=params, timeout=3)
+                    if response.status_code == 200:
+                        data = response.json()
+                        token_id = tokens_info[symbol]
+                        if token_id in data:
+                            token_data = data[token_id]
+                            price = float(token_data.get('usd', 0))
+                            change_24h = float(token_data.get('usd_24h_change', 0))
+                            high_24h = float(token_data.get('usd_24h_high', price))
+                            low_24h = float(token_data.get('usd_24h_low', price))
+                            volume_24h = float(token_data.get('usd_24h_vol', 0))
+                            
+                            # Récupérer l'historique depuis shared_data
+                            if symbol in shared_data['price_history']:
+                                price_history = shared_data['price_history'][symbol][-100:]
+                except Exception as e:
+                    pass
+        
+        if price is None or price == 0:
+            return jsonify({'error': f'Token {symbol} non trouvé'}), 404
+        
+        # Formatage de l'historique
+        formatted_history = []
+        if price_history:
+            for item in price_history:
+                if isinstance(item, dict):
+                    formatted_history.append({
+                        'time': item.get('time', ''),
+                        'price': float(item.get('price', 0))
+                    })
+                elif isinstance(item, (int, float)):
+                    formatted_history.append({
+                        'time': '',
+                        'price': float(item)
+                    })
+        
+        # Retourner la structure standardisée
+        return jsonify({
+            'symbol': symbol,
+            'name': crypto_names.get(symbol, symbol),
+            'price': price,
+            'change': change_24h,
+            'high': high_24h,
+            'low': low_24h,
+            'volume': volume_24h,
+            'history': formatted_history
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/prices')
 def api_prices():
     """API pour récupérer les prix crypto (Binance en priorité, CoinGecko en fallback)"""
+    import time
+    global _price_cache
+    
+    # Vérifier le cache
+    current_time = time.time()
+    if _price_cache['timestamp'] > 0 and (current_time - _price_cache['timestamp']) < CACHE_DURATION:
+        return jsonify({'prices': _price_cache['data']})
+    
     try:
         prices = []
         
@@ -747,44 +4995,80 @@ def api_prices():
             'LINK': 'LINKUSDT',
             'XRP': 'XRPUSDT',
             'DOGE': 'DOGEUSDT',
-            'LTC': 'LTCUSDT'
+            'LTC': 'LTCUSDT',
+            'TRX': 'TRXUSDT',
+            'ATOM': 'ATOMUSDT',
+            'ALGO': 'ALGOUSDT',
+            'NEAR': 'NEARUSDT',
+            'FTM': 'FTMUSDT',
+            'MANA': 'MANAUSDT',
+            'SAND': 'SANDUSDT',
+            'AXS': 'AXSUSDT',
+            'UNI': 'UNIUSDT',
+            'AAVE': 'AAVEUSDT',
+            'MKR': 'MKRUSDT',
+            'COMP': 'COMPUSDT',
+            'SUSHI': 'SUSHIUSDT',
+            'CRV': 'CRVUSDT',
+            '1INCH': '1INCHUSDT',
+            'YFI': 'YFIUSDT',
+            'SNX': 'SNXUSDT'
         }
         
         tokens_info = {
-            'BTC': {'symbol': 'BTC', 'name': 'Bitcoin', 'id': 'bitcoin'},
-            'ETH': {'symbol': 'ETH', 'name': 'Ethereum', 'id': 'ethereum'},
-            'BNB': {'symbol': 'BNB', 'name': 'BNB', 'id': 'binancecoin'},
-            'SOL': {'symbol': 'SOL', 'name': 'Solana', 'id': 'solana'},
-            'ADA': {'symbol': 'ADA', 'name': 'Cardano', 'id': 'cardano'},
-            'DOT': {'symbol': 'DOT', 'name': 'Polkadot', 'id': 'polkadot'},
-            'MATIC': {'symbol': 'MATIC', 'name': 'Polygon', 'id': 'matic-network'},
-            'AVAX': {'symbol': 'AVAX', 'name': 'Avalanche', 'id': 'avalanche-2'},
-            'LINK': {'symbol': 'LINK', 'name': 'Chainlink', 'id': 'chainlink'},
-            'XRP': {'symbol': 'XRP', 'name': 'Ripple', 'id': 'ripple'},
-            'DOGE': {'symbol': 'DOGE', 'name': 'Dogecoin', 'id': 'dogecoin'},
-            'LTC': {'symbol': 'LTC', 'name': 'Litecoin', 'id': 'litecoin'}
+            'BTC': {'symbol': 'BTC', 'name': 'Bitcoin', 'id': 'bitcoin', 'icon': '🟡'},
+            'ETH': {'symbol': 'ETH', 'name': 'Ethereum', 'id': 'ethereum', 'icon': '🔵'},
+            'BNB': {'symbol': 'BNB', 'name': 'BNB', 'id': 'binancecoin', 'icon': '🟢'},
+            'SOL': {'symbol': 'SOL', 'name': 'Solana', 'id': 'solana', 'icon': '🟣'},
+            'ADA': {'symbol': 'ADA', 'name': 'Cardano', 'id': 'cardano', 'icon': '🔴'},
+            'DOT': {'symbol': 'DOT', 'name': 'Polkadot', 'id': 'polkadot', 'icon': '⚪'},
+            'MATIC': {'symbol': 'MATIC', 'name': 'Polygon', 'id': 'matic-network', 'icon': '🟠'},
+            'AVAX': {'symbol': 'AVAX', 'name': 'Avalanche', 'id': 'avalanche-2', 'icon': '🔴'},
+            'LINK': {'symbol': 'LINK', 'name': 'Chainlink', 'id': 'chainlink', 'icon': '🔵'},
+            'XRP': {'symbol': 'XRP', 'name': 'Ripple', 'id': 'ripple', 'icon': '⚫'},
+            'DOGE': {'symbol': 'DOGE', 'name': 'Dogecoin', 'id': 'dogecoin', 'icon': '🟡'},
+            'LTC': {'symbol': 'LTC', 'name': 'Litecoin', 'id': 'litecoin', 'icon': '⚪'},
+            'TRX': {'symbol': 'TRX', 'name': 'Tron', 'id': 'tron', 'icon': '🔴'},
+            'ATOM': {'symbol': 'ATOM', 'name': 'Cosmos', 'id': 'cosmos', 'icon': '🔵'},
+            'ALGO': {'symbol': 'ALGO', 'name': 'Algorand', 'id': 'algorand', 'icon': '🔵'},
+            'NEAR': {'symbol': 'NEAR', 'name': 'Near', 'id': 'near-protocol', 'icon': '🟣'},
+            'FTM': {'symbol': 'FTM', 'name': 'Fantom', 'id': 'fantom', 'icon': '🔵'},
+            'MANA': {'symbol': 'MANA', 'name': 'Decentraland', 'id': 'decentraland', 'icon': '🟢'},
+            'SAND': {'symbol': 'SAND', 'name': 'The Sandbox', 'id': 'the-sandbox', 'icon': '🟠'},
+            'AXS': {'symbol': 'AXS', 'name': 'Axie Infinity', 'id': 'axie-infinity', 'icon': '🟣'},
+            'UNI': {'symbol': 'UNI', 'name': 'Uniswap', 'id': 'uniswap', 'icon': '🔵'},
+            'AAVE': {'symbol': 'AAVE', 'name': 'Aave', 'id': 'aave', 'icon': '🔴'},
+            'MKR': {'symbol': 'MKR', 'name': 'Maker', 'id': 'maker', 'icon': '🟢'},
+            'COMP': {'symbol': 'COMP', 'name': 'Compound', 'id': 'compound-governance-token', 'icon': '🔵'},
+            'SUSHI': {'symbol': 'SUSHI', 'name': 'SushiSwap', 'id': 'sushi', 'icon': '🟠'},
+            'CRV': {'symbol': 'CRV', 'name': 'Curve', 'id': 'curve-dao-token', 'icon': '🟣'},
+            '1INCH': {'symbol': '1INCH', 'name': '1inch', 'id': '1inch', 'icon': '🔵'},
+            'YFI': {'symbol': 'YFI', 'name': 'Yearn Finance', 'id': 'yearn-finance', 'icon': '🟡'},
+            'SNX': {'symbol': 'SNX', 'name': 'Synthetix', 'id': 'havven', 'icon': '🔴'}
         }
         
-        # Essayer Binance d'abord pour les tokens principaux
-        for symbol, info in tokens_info.items():
+        # Approche simplifiée et rapide : récupérer les prix avec timeout strict
+        def fetch_price_simple(symbol, info):
+            """Récupère le prix depuis Binance ou CoinGecko"""
+            # Essayer Binance d'abord si disponible
             if symbol in binance_tokens:
                 try:
                     url = f"{BINANCE_API_URL}/ticker/24hr"
                     params = {'symbol': binance_tokens[symbol]}
-                    response = requests.get(url, params=params, timeout=5)
+                    response = requests.get(url, params=params, timeout=1.5)
                     if response.status_code == 200:
                         data = response.json()
-                        prices.append({
+                        return {
                             'symbol': info['symbol'],
                             'name': info['name'],
                             'price': float(data['lastPrice']),
-                            'change_24h': float(data['priceChangePercent'])
-                        })
-                        continue
+                            'change_24h': float(data['priceChangePercent']),
+                            'volume': float(data.get('quoteVolume', 0))
+                        }
                 except:
                     pass
             
-            # Fallback sur CoinGecko
+            # Fallback CoinGecko
             try:
                 url = f"{COINGECKO_API_URL}/simple/price"
                 params = {
@@ -792,18 +5076,51 @@ def api_prices():
                     'vs_currencies': 'usd',
                     'include_24hr_change': 'true'
                 }
-                response = requests.get(url, params=params, timeout=5)
+                response = requests.get(url, params=params, timeout=1.5)
                 if response.status_code == 200:
                     data = response.json()
                     if info['id'] in data:
-                        prices.append({
+                        return {
                             'symbol': info['symbol'],
                             'name': info['name'],
                             'price': data[info['id']]['usd'],
-                            'change_24h': data[info['id']].get('usd_24h_change', 0)
-                        })
+                            'change_24h': data[info['id']].get('usd_24h_change', 0),
+                            'volume': 0
+                        }
             except:
                 pass
+            return None
+        
+        # Récupérer les prix en parallèle avec timeout global de 5 secondes max
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+            futures = {executor.submit(fetch_price_simple, symbol, info): symbol 
+                      for symbol, info in tokens_info.items()}
+            
+            # Attendre les résultats avec timeout strict
+            try:
+                for future in concurrent.futures.as_completed(futures, timeout=5):
+                    try:
+                        result = future.result(timeout=0.1)
+                        if result:
+                            prices.append(result)
+                    except:
+                        pass
+            except concurrent.futures.TimeoutError:
+                # Récupérer les résultats déjà disponibles
+                for future in futures:
+                    if future.done():
+                        try:
+                            result = future.result(timeout=0.1)
+                            if result:
+                                prices.append(result)
+                        except:
+                            pass
+        
+        # Trier par symbol pour un affichage cohérent
+        prices.sort(key=lambda x: x['symbol'])
+        
+        # Mettre à jour le cache
+        _price_cache = {'data': prices, 'timestamp': time.time()}
         
         return jsonify({'prices': prices})
     except Exception as e:

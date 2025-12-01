@@ -1,0 +1,231 @@
+/* Modal Trading Crypto - Style Binance/OKX */
+
+:root {
+    --white-cold: #F5F9FF;
+    --blue-neon: #00AFFF;
+    --blue-night: #06101C;
+    --black-blue-deep: #020915;
+    --grey-tech: #5A6C81;
+    --scientific-green: #4FFFA3;
+    --steel-blue: #13344F;
+    --arctic-blue: #A1E3FF;
+    --bg-primary: #020915;
+    --bg-secondary: #06101C;
+    --bg-card: #06101C;
+    --accent-primary: #00AFFF;
+    --accent-secondary: #4FFFA3;
+    --text-primary: #F5F9FF;
+    --text-secondary: #5A6C81;
+    --success: #4FFFA3;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+}
+
+/* Modal Trading */
+.trading-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 1000;
+    backdrop-filter: blur(5px);
+    animation: fadeIn 0.3s ease;
+}
+
+.trading-modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.trading-modal-content {
+    background: var(--bg-card);
+    border-radius: 20px;
+    padding: 30px;
+    max-width: 900px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9);
+    border: 1px solid rgba(0, 175, 255, 0.2);
+}
+
+.trading-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(161, 227, 255, 0.2);
+}
+
+.modal-header-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.modal-logo {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 10px rgba(0, 175, 255, 0.6));
+    animation: logoGlow 3s ease-in-out infinite;
+}
+
+@keyframes logoGlow {
+    0%, 100% { filter: drop-shadow(0 0 10px rgba(0, 175, 255, 0.6)); }
+    50% { filter: drop-shadow(0 0 20px rgba(79, 255, 163, 0.8)); }
+}
+
+.modal-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.trading-modal-header h2 {
+    font-size: 1.8em;
+    color: var(--white-cold);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    font-weight: 600;
+}
+
+.close-modal {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: var(--danger);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5em;
+    transition: all 0.3s ease;
+}
+
+.close-modal:hover {
+    background: rgba(239, 68, 68, 0.3);
+    transform: rotate(90deg);
+}
+
+.trading-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.trading-stat-card {
+    background: rgba(0, 175, 255, 0.03);
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid rgba(161, 227, 255, 0.2);
+    transition: all 0.3s ease;
+}
+
+.trading-stat-card:hover {
+    background: rgba(0, 175, 255, 0.06);
+    border-color: rgba(0, 175, 255, 0.4);
+    transform: translateY(-2px);
+}
+
+.trading-stat-label {
+    font-size: 0.85em;
+    color: var(--grey-tech);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.trading-stat-value {
+    font-size: 1.5em;
+    font-weight: 700;
+    color: var(--white-cold);
+}
+
+.trading-stat-value.positive {
+    color: var(--scientific-green);
+}
+
+.trading-stat-value.negative {
+    color: var(--danger);
+}
+
+.trading-chart-container {
+    background: rgba(0, 175, 255, 0.02);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    height: 400px;
+    min-height: 400px;
+    width: 100%;
+    position: relative;
+    border: 1px solid rgba(161, 227, 255, 0.15);
+}
+
+.trading-chart-container canvas {
+    max-height: 360px !important;
+    height: 360px !important;
+}
+
+.trading-live-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: var(--scientific-green);
+    border-radius: 50%;
+    margin-right: 8px;
+    animation: pulse 1.5s ease-in-out infinite;
+    box-shadow: 0 0 10px var(--scientific-green);
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.7;
+        transform: scale(1.1);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .trading-modal-content {
+        width: 95%;
+        padding: 20px;
+    }
+    
+    .trading-stats {
+        grid-template-columns: 1fr;
+    }
+    
+    .trading-modal-header h2 {
+        font-size: 1.4em;
+    }
+    
+    .modal-logo {
+        width: 36px;
+        height: 36px;
+    }
+}
+

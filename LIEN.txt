@@ -1,0 +1,13 @@
+============================================================
+   π-FI Dashboard - Lien Principal
+============================================================
+
+🌐 LIEN PRINCIPAL:
+   http://localhost:5000
+
+🚀 POUR DÉMARRER:
+   Double-cliquez sur: DEMARRER.bat
+
+💡 Le navigateur s'ouvrira automatiquement
+
+============================================================

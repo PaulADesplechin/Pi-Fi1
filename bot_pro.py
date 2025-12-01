@@ -1,5 +1,6 @@
 """
-Bot Telegram Crypto Pro - Version améliorée
+π-FI | AI Powered Finance & Intelligence
+Bot Telegram - Version améliorée
 Fonctionnalités: Alertes multi-tokens, Sniper, Rugpull detection, Wallet tracking, Dashboard web
 """
 import os
@@ -570,7 +571,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     welcome_text = (
         f"👋 Bienvenue {user_name}!\n\n"
-        "🤖 **Bot Crypto Pro** - Votre assistant crypto complet\n\n"
+        "**π-FI | AI Powered Finance & Intelligence**\n\n"
+        "**Mathematics. Intelligence. Results.**\n\n"
         "✨ **Fonctionnalités:**\n"
         "• 💰 Prix en temps réel (BTC, ETH, +1000 tokens)\n"
         "• 🔔 Alertes personnalisées\n"
@@ -902,7 +904,7 @@ async def show_settings(query, user_id: int):
 async def show_help(query):
     """Affiche l'aide"""
     help_text = (
-        "ℹ️ **Aide - Bot Crypto Pro**\n\n"
+        "**π-FI | Aide**\n\n"
         "**Commandes principales:**\n"
         "• `/start` - Menu principal\n"
         "• `/price <token>` - Prix d'un token\n"
@@ -999,6 +1001,146 @@ async def add_wallet_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN)
 
+async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /balance - Vérifie le solde ETH d'un wallet"""
+    if not context.args:
+        await update.message.reply_text(
+            "Usage: `/balance <adresse_ETH>`\n\n"
+            "Exemple: `/balance 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb`",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+    
+    address = context.args[0]
+    
+    if not SecurityValidator.validate_ethereum_address(address):
+        await update.message.reply_text("❌ Adresse Ethereum invalide\n\nFormat attendu: `0x...` (40 caractères hexadécimaux)", parse_mode=ParseMode.MARKDOWN)
+        return
+    
+    if not ETHERSCAN_API_KEY:
+        await update.message.reply_text(
+            "❌ Clé API Etherscan non configurée\n\n"
+            "Pour utiliser cette fonctionnalité, ajoutez `ETHERSCAN_API_KEY` dans votre fichier `.env`\n"
+            "Obtenez votre clé sur: https://etherscan.io/apis"
+        )
+        return
+    
+    await update.message.reply_text("⏳ Vérification du solde...")
+    
+    balance = await crypto_api.get_wallet_balance(address)
+    
+    if balance is None:
+        await update.message.reply_text("❌ Impossible de récupérer le solde\n\nVérifiez que l'adresse est correcte et que la clé API Etherscan est valide.")
+        return
+    
+    # Récupérer le prix ETH pour afficher la valeur en USD
+    eth_price_result = await crypto_api.get_price('ethereum')
+    eth_price = eth_price_result[0] if eth_price_result else 0
+    value_usd = balance * eth_price if eth_price > 0 else 0
+    
+    message = (
+        f"💰 **Balance du Wallet**\n\n"
+        f"📍 Adresse: `{address[:10]}...{address[-8:]}`\n\n"
+        f"💎 **{balance:.6f} ETH**\n"
+    )
+    
+    if value_usd > 0:
+        message += f"💵 **${value_usd:,.2f} USD**"
+    
+    await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN)
+
+async def alert_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /alert - Suit un token et envoie des alertes lors de variations >= 5%"""
+    if not context.args:
+        await update.message.reply_text(
+            "Usage: `/alert <id_token_coingecko>`\n\n"
+            "Exemples:\n"
+            "• `/alert bitcoin`\n"
+            "• `/alert ethereum`\n"
+            "• `/alert solana`\n\n"
+            "💡 Le bot surveillera le token et vous alertera lors de variations ≥ 5%",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+    
+    token_id = context.args[0].lower()
+    user_id = update.effective_user.id
+    
+    if not SecurityValidator.validate_token_id(token_id):
+        await update.message.reply_text("❌ ID de token invalide")
+        return
+    
+    # Vérifier que le token existe en récupérant son prix
+    await update.message.reply_text(f"🔍 Vérification du token {token_id}...")
+    
+    result = await crypto_api.get_price(token_id)
+    
+    if not result:
+        await update.message.reply_text(
+            f"❌ Token '{token_id}' introuvable\n\n"
+            "💡 Essayez avec l'ID CoinGecko exact:\n"
+            "• `bitcoin` pour BTC\n"
+            "• `ethereum` pour ETH\n"
+            "• `solana` pour SOL\n"
+            "• etc."
+        )
+        return
+    
+    price, change_24h, _, _ = result
+    
+    # Ajouter l'alerte au système
+    if token_id not in alert_subscribers:
+        alert_subscribers[token_id] = set()
+    
+    alert_subscribers[token_id].add(user_id)
+    add_alert(user_id, token_id)
+    
+    # Stocker le dernier prix pour cet utilisateur et ce token
+    if user_id not in tracked_tokens:
+        tracked_tokens[user_id] = {}
+    tracked_tokens[user_id][token_id] = price
+    
+    message = (
+        f"✅ **Alerte activée pour {token_id.upper()}**\n\n"
+        f"💵 Prix actuel: **${price:,.4f}**\n"
+        f"📊 Variation 24h: {change_24h:+.2f}%\n\n"
+        f"🔔 Vous serez alerté lors de variations ≥ 5%\n\n"
+        f"💡 Pour désactiver: `/alert_remove {token_id}`"
+    )
+    
+    await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN)
+
+async def alert_remove_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /alert_remove - Retire une alerte"""
+    if not context.args:
+        await update.message.reply_text(
+            "Usage: `/alert_remove <id_token_coingecko>`\n\n"
+            "Exemple: `/alert_remove bitcoin`",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+    
+    token_id = context.args[0].lower()
+    user_id = update.effective_user.id
+    
+    if token_id in alert_subscribers and user_id in alert_subscribers[token_id]:
+        alert_subscribers[token_id].discard(user_id)
+        remove_alert(user_id, token_id)
+        
+        # Retirer aussi de tracked_tokens
+        if user_id in tracked_tokens and token_id in tracked_tokens[user_id]:
+            del tracked_tokens[user_id][token_id]
+        
+        await update.message.reply_text(
+            f"✅ Alerte pour **{token_id.upper()}** retirée",
+            parse_mode=ParseMode.MARKDOWN
+        )
+    else:
+        await update.message.reply_text(
+            f"ℹ️ Aucune alerte active pour **{token_id.upper()}**",
+            parse_mode=ParseMode.MARKDOWN
+        )
+
 async def rugpull_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Commande /rugpull"""
     if not context.args:
@@ -1053,28 +1195,67 @@ async def monitor_prices(context: ContextTypes.DEFAULT_TYPE):
                 if not subscribers:
                     continue
                 
-                # Vérifier si changement significatif
-                if abs(change_24h) >= 5.0:  # Seuil par défaut 5%
-                    change_emoji = "📈" if change_24h >= 0 else "📉"
-                    message = (
-                        f"{change_emoji} **Alerte {token_id.upper()}**\n\n"
-                        f"Variation 24h: **{change_24h:+.2f}%**\n"
-                        f"Prix actuel: **${price:,.4f}**"
-                    )
-                    
-                    for user_id in list(subscribers):
-                        try:
+                # Vérifier les variations pour chaque utilisateur
+                for user_id in list(subscribers):
+                    try:
+                        # Récupérer le dernier prix connu pour cet utilisateur
+                        last_price = None
+                        if user_id in tracked_tokens and token_id in tracked_tokens[user_id]:
+                            last_price = tracked_tokens[user_id][token_id]
+                        
+                        # Si on a un dernier prix, calculer la variation depuis
+                        if last_price is not None and last_price > 0:
+                            variation = ((price - last_price) / last_price) * 100
+                            
+                            # Alerter si variation >= 5%
+                            if abs(variation) >= 5.0:
+                                direction = "📈 +5%" if variation > 0 else "📉 -5%"
+                                change_emoji = "📈" if variation > 0 else "📉"
+                                
+                                message = (
+                                    f"⚠️ **ALERTE {token_id.upper()} {direction}**\n\n"
+                                    f"Prix: **${price:,.4f}**\n"
+                                    f"Variation: **{variation:+.2f}%**\n"
+                                    f"Variation 24h: {change_24h:+.2f}%"
+                                )
+                                
+                                await context.bot.send_message(
+                                    chat_id=user_id,
+                                    text=message,
+                                    parse_mode=ParseMode.MARKDOWN
+                                )
+                                
+                                # Mettre à jour le dernier prix
+                                tracked_tokens[user_id][token_id] = price
+                        else:
+                            # Première fois qu'on surveille, juste stocker le prix
+                            if user_id not in tracked_tokens:
+                                tracked_tokens[user_id] = {}
+                            tracked_tokens[user_id][token_id] = price
+                        
+                        # Aussi vérifier la variation 24h globale (système existant)
+                        if abs(change_24h) >= 5.0:
+                            change_emoji = "📈" if change_24h >= 0 else "📉"
+                            message = (
+                                f"{change_emoji} **Alerte {token_id.upper()}**\n\n"
+                                f"Variation 24h: **{change_24h:+.2f}%**\n"
+                                f"Prix actuel: **${price:,.4f}**"
+                            )
+                            
                             await context.bot.send_message(
                                 chat_id=user_id,
                                 text=message,
                                 parse_mode=ParseMode.MARKDOWN
                             )
-                        except Exception as e:
-                            print(f"Erreur envoi alerte à {user_id}: {e}")
-                            subscribers.discard(user_id)
+                            
+                    except Exception as e:
+                        print(f"Erreur envoi alerte à {user_id} pour {token_id}: {e}")
+                        # Ne pas retirer l'utilisateur pour une erreur temporaire
     
     except Exception as e:
         print(f"Erreur dans monitor_prices: {e}")
+        import traceback
+        traceback.print_exc()
 
 # ==================== MAIN ====================
 
@@ -1091,18 +1272,22 @@ def main():
     # Handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("price", price_command))
+    application.add_handler(CommandHandler("balance", balance_command))
+    application.add_handler(CommandHandler("alert", alert_command))
+    application.add_handler(CommandHandler("alert_remove", alert_remove_command))
     application.add_handler(CommandHandler("addwallet", add_wallet_command))
     application.add_handler(CommandHandler("rugpull", rugpull_command))
     application.add_handler(CallbackQueryHandler(button_handler))
     
-    # Job de surveillance (toutes les 60 secondes)
+    # Job de surveillance (toutes les 30 secondes pour des alertes rapides)
     job_queue = application.job_queue
     if job_queue:
-        job_queue.run_repeating(monitor_prices, interval=60, first=10)
+        job_queue.run_repeating(monitor_prices, interval=30, first=10)
+        print("✅ Système de surveillance des alertes activé (vérification toutes les 30 secondes)")
     else:
         print("⚠️ JobQueue non disponible. Installez python-telegram-bot[job-queue]")
     
-    print("🤖 Bot Crypto Pro démarré!")
+    print("π-FI Bot démarré! | AI Powered Finance & Intelligence")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
