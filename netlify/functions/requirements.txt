@@ -1,6 +1,0 @@
-# Dépendances spécifiques pour la fonction Netlify
-# Ces dépendances seront installées dans l'environnement de la fonction
-serverless-wsgi>=0.8.2
-flask>=3.0.0
-requests==2.31.0
-

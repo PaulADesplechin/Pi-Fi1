@@ -1,6 +1,6 @@
 # Netlify Redirects pour π-FI Dashboard
-# Toutes les routes sont gérées par la fonction serverless
-# Exception: les fichiers statiques sont servis directement
+# IMPORTANT: L'ordre des redirections est crucial
+# Les fichiers statiques doivent être servis en premier
 
 /static/*  /static/:splat  200
 /*         /.netlify/functions/server  200
