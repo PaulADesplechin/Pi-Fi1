@@ -1,6 +1,6 @@
 """
 Netlify Serverless Function pour π-FI Dashboard
-Format Netlify Functions Python
+Version corrigée et fonctionnelle
 """
 import sys
 import os
@@ -12,8 +12,10 @@ sys.path.insert(0, base_dir)
 
 print(f"📁 Base directory: {base_dir}")
 print(f"📁 Current directory: {os.getcwd()}")
+print(f"📁 Python path: {sys.path}")
 
 # Importer Flask app
+app = None
 try:
     from dashboard import app
     print("✅ Application Flask importée avec succès")
@@ -26,31 +28,32 @@ except Exception as e:
 def handler(event, context):
     """
     Handler Netlify Function pour Flask
-    Format Netlify Functions Python
     """
-    print(f"📥 Event reçu: {json.dumps(event, indent=2)}")
+    print(f"📥 Event reçu: {json.dumps(event, indent=2, default=str)}")
     
     if app is None:
         return {
             'statusCode': 500,
             'headers': {
                 'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
             },
             'body': json.dumps({
                 'error': 'Application Flask non disponible',
                 'base_dir': base_dir,
-                'current_dir': os.getcwd()
+                'current_dir': os.getcwd(),
+                'python_path': sys.path
             })
         }
     
     try:
         from serverless_wsgi import handle_request
         
-        # Adapter l'événement Netlify au format Lambda pour serverless-wsgi
+        # Extraire les informations de l'événement Netlify
         http_method = event.get('httpMethod') or event.get('method', 'GET')
         raw_path = event.get('path') or event.get('rawPath', '/')
         
-        # Netlify ajoute le préfixe de la fonction dans le path, le retirer
+        # Netlify ajoute le préfixe de la fonction, le retirer
         path = raw_path
         if path.startswith('/.netlify/functions/server'):
             path = path.replace('/.netlify/functions/server', '', 1)
@@ -59,11 +62,20 @@ def handler(event, context):
         if not path.startswith('/'):
             path = '/' + path
         
-        query_params = event.get('queryStringParameters') or event.get('query', {}) or {}
+        # Extraire les query parameters
+        query_params = {}
+        if 'queryStringParameters' in event and event['queryStringParameters']:
+            query_params = event['queryStringParameters']
+        elif 'query' in event and event['query']:
+            query_params = event['query']
+        
+        # Extraire les headers
         headers = event.get('headers', {}) or {}
+        
+        # Extraire le body
         body = event.get('body', '') or ''
         
-        # Créer l'événement Lambda
+        # Créer l'événement Lambda pour serverless-wsgi
         lambda_event = {
             'httpMethod': http_method,
             'path': path,
@@ -74,19 +86,34 @@ def handler(event, context):
             'body': body,
             'isBase64Encoded': False,
             'requestContext': {
-                'requestId': context.get('requestId', ''),
+                'requestId': context.get('requestId', 'netlify-' + str(os.getpid())),
                 'stage': '$default',
                 'httpMethod': http_method,
                 'path': path,
+                'identity': {
+                    'sourceIp': headers.get('x-forwarded-for', '127.0.0.1')
+                }
             }
         }
         
-        print(f"🔄 Appel de handle_request avec path: {path} (raw: {raw_path})")
+        print(f"🔄 Appel Flask avec path: {path} (raw: {raw_path})")
+        print(f"🔄 Method: {http_method}")
+        print(f"🔄 Query params: {query_params}")
         
         # Appeler serverless-wsgi
         response = handle_request(app, lambda_event, context)
         
-        print(f"✅ Réponse reçue: {type(response)}")
+        print(f"✅ Réponse reçue: statusCode={response.get('statusCode', 'N/A')}")
+        
+        # S'assurer que les headers CORS sont présents pour les API
+        if 'headers' not in response:
+            response['headers'] = {}
+        
+        # Ajouter CORS si nécessaire
+        if path.startswith('/api/'):
+            response['headers']['Access-Control-Allow-Origin'] = '*'
+            response['headers']['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+            response['headers']['Access-Control-Allow-Headers'] = 'Content-Type'
         
         # Retourner la réponse
         return response
@@ -97,6 +124,7 @@ def handler(event, context):
             'statusCode': 500,
             'headers': {
                 'Content-Type': 'text/html; charset=utf-8',
+                'Access-Control-Allow-Origin': '*',
             },
             'body': f'''
             <!DOCTYPE html>
@@ -105,15 +133,16 @@ def handler(event, context):
                 <title>π-FI Dashboard - Erreur</title>
                 <meta charset="UTF-8">
                 <style>
-                    body {{ font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }}
+                    body {{ font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; background: #020915; color: #F5F9FF; }}
                     h1 {{ color: #00AFFF; }}
                     .error {{ color: #ef4444; }}
+                    code {{ background: #06101C; padding: 2px 6px; border-radius: 4px; }}
                 </style>
             </head>
             <body>
                 <h1>π-FI | AI Powered Finance & Intelligence</h1>
                 <p class="error">❌ Erreur: serverless-wsgi non disponible</p>
-                <p>Vérifiez que <code>serverless-wsgi>=0.8.2</code> est dans <code>requirements.txt</code></p>
+                <p>Vérifiez que <code>serverless-wsgi>=0.8.2</code> est dans <code>netlify/functions/server/requirements.txt</code></p>
                 <p><strong>Erreur:</strong> {str(e)}</p>
             </body>
             </html>
@@ -122,16 +151,18 @@ def handler(event, context):
     except Exception as e:
         print(f"❌ Erreur dans le handler: {e}")
         import traceback
-        traceback.print_exc()
+        error_trace = traceback.format_exc()
+        print(error_trace)
         return {
             'statusCode': 500,
             'headers': {
                 'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
             },
             'body': json.dumps({
                 'error': str(e),
                 'type': type(e).__name__,
-                'traceback': traceback.format_exc()
+                'path': path if 'path' in locals() else 'unknown',
+                'traceback': error_trace
             })
         }
-
