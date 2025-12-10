@@ -1,0 +1,55 @@
+{
+  "name": "Pifi - Alertes Crypto & Actions",
+  "short_name": "Pifi",
+  "description": "Application moderne d'alertes automatiques sur les cryptomonnaies et actions avec assistant IA intégré",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0e27",
+  "theme_color": "#00d4ff",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logo-favicon.svg",
+      "sizes": "32x32",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-icon.svg",
+      "sizes": "64x64",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo-circle.svg",
+      "sizes": "120x120",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo-modern.svg",
+      "sizes": "160x160",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "business"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Accéder au tableau de bord",
+      "url": "/dashboard",
+      "icons": [{ "src": "/logo-icon.svg", "sizes": "64x64" }]
+    },
+    {
+      "name": "Alertes",
+      "short_name": "Alertes",
+      "description": "Gérer vos alertes",
+      "url": "/alerts",
+      "icons": [{ "src": "/logo-icon.svg", "sizes": "64x64" }]
+    }
+  ]
+}
+

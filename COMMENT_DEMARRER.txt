@@ -1,0 +1,94 @@
+============================================================
+   PIFI - COMMENT DÉMARRER L'APPLICATION
+============================================================
+
+📋 MÉTHODE LA PLUS SIMPLE (RECOMMANDÉE)
+============================================================
+
+1. Double-cliquez sur le fichier : DEMARRER_SIMPLE.bat
+   OU
+   Double-cliquez sur : LANCER.bat
+
+2. Attendez que les fenêtres de commande s'ouvrent
+   (L'installation des dépendances peut prendre 2-5 minutes la première fois)
+
+3. Le navigateur s'ouvrira automatiquement sur http://localhost:3000
+
+4. Si le navigateur ne s'ouvre pas, allez manuellement sur :
+   http://localhost:3000
+
+
+📋 MÉTHODE MANUELLE (Si les scripts ne fonctionnent pas)
+============================================================
+
+Ouvrez DEUX fenêtres de terminal (cmd.exe) :
+
+TERMINAL 1 - Backend :
+------------------------
+cd C:\Users\laure\Desktop\projettelegram\pifi\server
+npm install
+npm start
+
+TERMINAL 2 - Frontend :
+------------------------
+cd C:\Users\laure\Desktop\projettelegram\pifi
+npm install
+npm run dev
+
+Ensuite, ouvrez votre navigateur sur : http://localhost:3000
+
+
+📋 VÉRIFICATION
+============================================================
+
+✅ Backend fonctionne si vous voyez : "🚀 Serveur démarré sur le port 3001"
+✅ Frontend fonctionne si vous voyez : "Ready on http://localhost:3000"
+
+Pour vérifier les ports :
+- Backend : http://localhost:3001/health
+- Frontend : http://localhost:3000
+
+
+📋 EN CAS DE PROBLÈME
+============================================================
+
+1. Port déjà utilisé ?
+   - Fermez les autres applications qui utilisent les ports 3000 ou 3001
+   - Ou changez les ports dans le fichier .env
+
+2. Erreur "npm not found" ?
+   - Installez Node.js depuis https://nodejs.org
+   - Redémarrez votre ordinateur après l'installation
+
+3. Erreur lors de l'installation ?
+   - Supprimez les dossiers "node_modules" et réessayez
+   - Vérifiez votre connexion internet
+
+4. L'application ne se charge pas ?
+   - Attendez 10-15 secondes après le démarrage
+   - Vérifiez que les deux serveurs sont bien démarrés
+   - Vérifiez les fenêtres de terminal pour les erreurs
+
+
+📋 INFORMATIONS IMPORTANTES
+============================================================
+
+- Backend : http://localhost:3001
+- Frontend : http://localhost:3000
+- Les serveurs doivent TOUJOURS être en cours d'exécution pour utiliser l'app
+- Fermez les fenêtres de terminal pour arrêter les serveurs
+
+
+📋 PREMIÈRE UTILISATION
+============================================================
+
+1. Explorez les pages dans le menu de navigation
+2. Allez dans "Alertes" pour créer votre première alerte
+3. Testez l'assistant IA dans la page dédiée
+4. Consultez les cryptomonnaies et actions dans leurs pages respectives
+
+
+============================================================
+   Bonne utilisation de Pifi ! 🚀
+============================================================
+

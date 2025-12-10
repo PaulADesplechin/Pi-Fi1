@@ -1,0 +1,67 @@
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gradient radial pour le fond -->
+    <radialGradient id="bgGradient" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#1a1f3a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0a0e27;stop-opacity:1" />
+    </radialGradient>
+    
+    <!-- Gradient pour les éléments -->
+    <linearGradient id="elementGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00ffff;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#00d4ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0099cc;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Filtre de lueur forte -->
+    <filter id="strongGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="blur"/>
+      <feOffset in="blur" dx="0" dy="0" result="offsetBlur"/>
+      <feFlood flood-color="#00d4ff" flood-opacity="0.9"/>
+      <feComposite in2="offsetBlur" operator="in"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Filtre de lueur pour les cercles -->
+    <filter id="circleGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Fond avec gradient -->
+  <rect width="120" height="120" rx="60" fill="url(#bgGradient)"/>
+  
+  <!-- Cercles concentriques -->
+  <circle cx="60" cy="60" r="50" fill="none" stroke="url(#elementGradient)" stroke-width="1.5" opacity="0.3" filter="url(#circleGlow)"/>
+  <circle cx="60" cy="60" r="42" fill="none" stroke="url(#elementGradient)" stroke-width="2" opacity="0.5" filter="url(#circleGlow)"/>
+  <circle cx="60" cy="60" r="35" fill="none" stroke="url(#elementGradient)" stroke-width="2.5" opacity="0.7" filter="url(#circleGlow)"/>
+  
+  <!-- Design abstrait moderne - Forme géométrique stylisée -->
+  <g transform="translate(60, 60)" filter="url(#strongGlow)">
+    <!-- Forme centrale abstraite -->
+    <circle cx="0" cy="-8" r="12" fill="url(#elementGradient)" opacity="0.8"/>
+    <circle cx="0" cy="8" r="12" fill="url(#elementGradient)" opacity="0.8"/>
+    <rect x="-12" y="-4" width="24" height="8" rx="4" fill="url(#elementGradient)"/>
+    
+    <!-- Lignes décoratives -->
+    <line x1="-20" y1="0" x2="-12" y2="0" stroke="url(#elementGradient)" stroke-width="3" stroke-linecap="round"/>
+    <line x1="12" y1="0" x2="20" y2="0" stroke="url(#elementGradient)" stroke-width="3" stroke-linecap="round"/>
+  </g>
+  
+  <!-- Points décoratifs autour -->
+  <circle cx="60" cy="15" r="2.5" fill="#00d4ff" opacity="0.8" filter="url(#circleGlow)"/>
+  <circle cx="85" cy="30" r="2.5" fill="#00ffff" opacity="0.8" filter="url(#circleGlow)"/>
+  <circle cx="95" cy="60" r="2.5" fill="#00d4ff" opacity="0.8" filter="url(#circleGlow)"/>
+  <circle cx="85" cy="90" r="2.5" fill="#00ffff" opacity="0.8" filter="url(#circleGlow)"/>
+  <circle cx="60" cy="105" r="2.5" fill="#00d4ff" opacity="0.8" filter="url(#circleGlow)"/>
+  <circle cx="35" cy="90" r="2.5" fill="#00ffff" opacity="0.8" filter="url(#circleGlow)"/>
+  <circle cx="25" cy="60" r="2.5" fill="#00d4ff" opacity="0.8" filter="url(#circleGlow)"/>
+  <circle cx="35" cy="30" r="2.5" fill="#00ffff" opacity="0.8" filter="url(#circleGlow)"/>
+</svg>

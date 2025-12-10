@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.env*.local
+*.log
+.DS_Store
+dist
+build
+README.md
+*.md
+!DEPLOIEMENT_RENDER.md
+!RENDER_QUICK_START.md
+
