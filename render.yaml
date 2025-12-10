@@ -4,7 +4,7 @@ services:
     name: pifi-backend
     env: node
     plan: free
-    buildCommand: cd server && npm install
+    buildCommand: cd server && npm install --production
     startCommand: cd server && node index.js
     envVars:
       - key: NODE_ENV
@@ -17,8 +17,10 @@ services:
         value: https://pifi-frontend.onrender.com
       - key: OPENAI_API_KEY
         sync: false
+        optional: true
       - key: COINGECKO_API_KEY
         sync: false
+        optional: true
     healthCheckPath: /health
 
   # Frontend Service
@@ -26,7 +28,7 @@ services:
     name: pifi-frontend
     env: node
     plan: free
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
@@ -35,3 +37,4 @@ services:
         value: https://pifi-backend.onrender.com
       - key: PORT
         value: 3000
+    healthCheckPath: /

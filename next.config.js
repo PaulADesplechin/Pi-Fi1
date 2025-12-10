@@ -2,13 +2,12 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  // Configuration PWA
-  experimental: {
-    appDir: true,
-  },
+  // Output standalone pour meilleure compatibilité Render
+  output: 'standalone',
   // Images
   images: {
     domains: ['assets.coingecko.com', 'logo.clearbit.com'],
+    unoptimized: false,
   },
   // Headers pour sécurité
   async headers() {
@@ -32,7 +31,13 @@ const nextConfig = {
       },
     ];
   },
+  // Désactiver les warnings pour le build
+  typescript: {
+    ignoreBuildErrors: false,
+  },
+  eslint: {
+    ignoreDuringBuilds: false,
+  },
 };
 
 module.exports = nextConfig;
-
