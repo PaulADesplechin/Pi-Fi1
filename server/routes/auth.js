@@ -84,18 +84,25 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// Obtenir les informations de l'utilisateur connecté
+// Obtenir les informations de l'utilisateur connecté (avec fallback démo)
 router.get("/me", authenticateToken, (req, res) => {
   const userId = req.user.id;
   const user = users.find((u) => u.id === userId);
   
   if (!user) {
-    return res.status(404).json({ error: "Utilisateur non trouvé" });
+    // Fallback pour mode démo
+    return res.json({
+      id: req.user.id,
+      email: req.user.email || "demo@pifi.app",
+      username: req.user.username || req.user.email?.split("@")[0] || "demo-user",
+      createdAt: new Date().toISOString(),
+    });
   }
 
   res.json({
     id: user.id,
     email: user.email,
+    username: user.email?.split("@")[0] || "user",
     createdAt: user.createdAt,
   });
 });
