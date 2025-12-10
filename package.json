@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "Pifi - Application moderne d'alertes cryptomonnaies et actions avec assistant IA",
   "private": true,
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -45,4 +49,3 @@
     "eslint-config-next": "^15.0.0"
   }
 }
-

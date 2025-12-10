@@ -5,7 +5,7 @@ services:
     env: node
     plan: free
     buildCommand: cd server && npm install
-    startCommand: cd server && npm start
+    startCommand: cd server && node index.js
     envVars:
       - key: NODE_ENV
         value: production
@@ -14,14 +14,14 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: FRONTEND_URL
-        value: https://pifi.onrender.com
+        value: https://pifi-frontend.onrender.com
       - key: OPENAI_API_KEY
         sync: false
       - key: COINGECKO_API_KEY
         sync: false
     healthCheckPath: /health
 
-  # Frontend Service (optionnel - peut aussi être sur Vercel)
+  # Frontend Service
   - type: web
     name: pifi-frontend
     env: node
