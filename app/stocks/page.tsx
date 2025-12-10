@@ -153,11 +153,42 @@ export default function StocksPage() {
                     <h3 className="text-xl font-bold text-white">{stock.name}</h3>
                     <p className="text-sm text-gray-400">{stock.symbol}</p>
                   </div>
-                  {isPositive ? (
-                    <TrendingUp className="w-6 h-6 text-electric-blue" />
-                  ) : (
-                    <TrendingDown className="w-6 h-6 text-red-500" />
-                  )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const saved = localStorage.getItem("favorites") || "[]";
+                        const favs = JSON.parse(saved);
+                        const isFavorite = favorites.includes(stock.symbol);
+                        
+                        if (isFavorite) {
+                          const updated = favs.filter((f: any) => f.symbol !== stock.symbol);
+                          localStorage.setItem("favorites", JSON.stringify(updated));
+                          setFavorites(updated.map((f: any) => f.symbol));
+                        } else {
+                          favs.push({
+                            id: stock.symbol,
+                            symbol: stock.symbol,
+                            name: stock.name,
+                            type: "stock",
+                            price: stock.price,
+                            change: stock.changePercent,
+                            sparkline_data: stock.sparkline_data,
+                          });
+                          localStorage.setItem("favorites", JSON.stringify(favs));
+                          setFavorites([...favorites, stock.symbol]);
+                        }
+                      }}
+                      className="text-gray-400 hover:text-electric-blue transition-colors"
+                    >
+                      <Heart className={`w-5 h-5 ${favorites.includes(stock.symbol) ? "fill-electric-blue text-electric-blue" : ""}`} />
+                    </button>
+                    {isPositive ? (
+                      <TrendingUp className="w-6 h-6 text-electric-blue" />
+                    ) : (
+                      <TrendingDown className="w-6 h-6 text-red-500" />
+                    )}
+                  </div>
                 </div>
 
                 <div className="mb-4">
