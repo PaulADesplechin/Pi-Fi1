@@ -11,6 +11,12 @@
   --dark-surface: #0f1629;
   --dark-card: #151b2e;
   --dark-border: #1e2640;
+  
+  /* Light theme colors */
+  --light-bg: #f8fafc;
+  --light-surface: #ffffff;
+  --light-card: #f1f5f9;
+  --light-border: #e2e8f0;
 }
 
 * {
@@ -32,6 +38,41 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Light theme */
+.light body {
+  background: var(--light-bg);
+  color: #1e293b;
+}
+
+.light .glass {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+}
+
+.light .glass-strong {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+}
+
+.light .input-field {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  color: #1e293b;
+}
+
+.light .text-gray-400 {
+  color: #64748b;
+}
+
+.light .text-gray-300 {
+  color: #475569;
+}
+
+.light .text-white {
+  color: #1e293b;
 }
 
 /* Glassmorphism effect */
@@ -66,6 +107,14 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--electric-blue-light);
+}
+
+.light ::-webkit-scrollbar-track {
+  background: var(--light-surface);
+}
+
+.light ::-webkit-scrollbar-thumb {
+  background: var(--electric-blue);
 }
 
 /* Animations personnalisées */
@@ -192,4 +241,3 @@ body {
 .input-field::placeholder {
   color: rgba(255, 255, 255, 0.5);
 }
-

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Search, TrendingUp, TrendingDown, ExternalLink } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, ExternalLink, Heart } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import Link from "next/link";
 
@@ -27,6 +27,15 @@ export default function CryptoPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [selectedCrypto, setSelectedCrypto] = useState<CryptoAsset | null>(null);
+  const [favorites, setFavorites] = useState<string[]>([]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("favorites");
+    if (saved) {
+      const favs = JSON.parse(saved);
+      setFavorites(favs.map((f: any) => f.symbol));
+    }
+  }, []);
 
   useEffect(() => {
     fetchCryptos();
@@ -136,11 +145,42 @@ export default function CryptoPage() {
                     <h3 className="text-xl font-bold text-white">{crypto.name}</h3>
                     <p className="text-sm text-gray-400 uppercase">{crypto.symbol}</p>
                   </div>
-                  {isPositive ? (
-                    <TrendingUp className="w-6 h-6 text-electric-blue" />
-                  ) : (
-                    <TrendingDown className="w-6 h-6 text-red-500" />
-                  )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const saved = localStorage.getItem("favorites") || "[]";
+                        const favs = JSON.parse(saved);
+                        const isFavorite = favorites.includes(crypto.symbol);
+                        
+                        if (isFavorite) {
+                          const updated = favs.filter((f: any) => f.symbol !== crypto.symbol);
+                          localStorage.setItem("favorites", JSON.stringify(updated));
+                          setFavorites(updated.map((f: any) => f.symbol));
+                        } else {
+                          favs.push({
+                            id: crypto.id,
+                            symbol: crypto.symbol,
+                            name: crypto.name,
+                            type: "crypto",
+                            price: crypto.current_price,
+                            change: crypto.price_change_percentage_24h,
+                            sparkline_data: crypto.sparkline_data,
+                          });
+                          localStorage.setItem("favorites", JSON.stringify(favs));
+                          setFavorites([...favorites, crypto.symbol]);
+                        }
+                      }}
+                      className="text-gray-400 hover:text-electric-blue transition-colors"
+                    >
+                      <Heart className={`w-5 h-5 ${favorites.includes(crypto.symbol) ? "fill-electric-blue text-electric-blue" : ""}`} />
+                    </button>
+                    {isPositive ? (
+                      <TrendingUp className="w-6 h-6 text-electric-blue" />
+                    ) : (
+                      <TrendingDown className="w-6 h-6 text-red-500" />
+                    )}
+                  </div>
                 </div>
 
                 <div className="mb-4">

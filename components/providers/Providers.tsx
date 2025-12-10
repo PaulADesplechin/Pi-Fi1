@@ -1,12 +1,14 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { useNotifications } from "@/hooks/useNotifications";
 
 interface AppContextType {
   isConnected: boolean;
   user: any;
   alerts: any[];
   setAlerts: (alerts: any[]) => void;
+  notifications: ReturnType<typeof useNotifications>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -15,8 +17,14 @@ export function Providers({ children }: { children: ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
   const [user, setUser] = useState(null);
   const [alerts, setAlerts] = useState<any[]>([]);
+  const notifications = useNotifications();
 
   useEffect(() => {
+    // Demander la permission de notification au démarrage
+    if (notifications.isSupported && notifications.permission === "default") {
+      notifications.requestPermission();
+    }
+
     // Vérifier si l'utilisateur est connecté
     const token = localStorage.getItem("token");
     
@@ -68,13 +76,30 @@ export function Providers({ children }: { children: ReactNode }) {
 
         socket.on("alert", (alert: any) => {
           setAlerts((prev) => [alert, ...prev]);
+          
+          // Sauvegarder dans l'historique
+          const history = localStorage.getItem("alertHistory") || "[]";
+          const histArray = JSON.parse(history);
+          histArray.unshift({
+            id: alert.id,
+            symbol: alert.symbol,
+            name: alert.name,
+            type: alert.type,
+            change: parseFloat(alert.change),
+            threshold: alert.threshold,
+            timestamp: alert.timestamp,
+            assetType: alert.assetType,
+          });
+          localStorage.setItem("alertHistory", JSON.stringify(histArray.slice(0, 100))); // Garder les 100 dernières
+          
           // Notification browser
-          if ("Notification" in window && Notification.permission === "granted") {
-            new Notification(`Alerte ${alert.type}`, {
-              body: `${alert.symbol} : ${alert.change}%`,
-              icon: "/logo-circle.svg",
-            });
-          }
+          notifications.showNotification(`Alerte ${alert.type === "up" ? "📈 Hausse" : "📉 Baisse"}`, {
+            body: `${alert.symbol} : ${alert.change}% (${alert.name})`,
+            icon: "/logo-icon.svg",
+            badge: "/logo-icon.svg",
+            tag: `alert-${alert.id}`,
+            requireInteraction: false,
+          });
         });
       } catch (error) {
         console.error("Erreur connexion WebSocket:", error);
@@ -88,10 +113,10 @@ export function Providers({ children }: { children: ReactNode }) {
         socket.disconnect();
       }
     };
-  }, []);
+  }, [notifications]);
 
   return (
-    <AppContext.Provider value={{ isConnected, user, alerts, setAlerts }}>
+    <AppContext.Provider value={{ isConnected, user, alerts, setAlerts, notifications }}>
       {children}
     </AppContext.Provider>
   );
@@ -104,4 +129,3 @@ export function useApp() {
   }
   return context;
 }
-

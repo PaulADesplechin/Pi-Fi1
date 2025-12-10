@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { TrendingUp, TrendingDown, DollarSign, Activity } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Activity, Star, Clock, Bell, Zap } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
+import Link from "next/link";
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
@@ -11,6 +12,8 @@ export default function DashboardPage() {
     totalStocks: 0,
     activeAlerts: 0,
     totalValue: 0,
+    favorites: 0,
+    historyCount: 0,
   });
 
   const [chartData, setChartData] = useState<any[]>([]);
@@ -33,10 +36,42 @@ export default function DashboardPage() {
       const response = await fetch(`${apiUrl}/api/stats`);
       if (response.ok) {
         const data = await response.json();
-        setStats(data);
+        // Ajouter les stats locales
+        const favorites = localStorage.getItem("favorites");
+        const history = localStorage.getItem("alertHistory");
+        setStats({
+          ...data,
+          favorites: favorites ? JSON.parse(favorites).length : 0,
+          historyCount: history ? JSON.parse(history).length : 0,
+        });
+      } else {
+        // Stats locales si API indisponible
+        const favorites = localStorage.getItem("favorites");
+        const history = localStorage.getItem("alertHistory");
+        const alerts = localStorage.getItem("alerts");
+        setStats({
+          totalCrypto: 12,
+          totalStocks: 8,
+          activeAlerts: alerts ? JSON.parse(alerts).filter((a: any) => a.active).length : 0,
+          totalValue: 125000,
+          favorites: favorites ? JSON.parse(favorites).length : 0,
+          historyCount: history ? JSON.parse(history).length : 0,
+        });
       }
     } catch (error) {
       console.error("Erreur lors du chargement des stats:", error);
+      // Stats locales en fallback
+      const favorites = localStorage.getItem("favorites");
+      const history = localStorage.getItem("alertHistory");
+      const alerts = localStorage.getItem("alerts");
+      setStats({
+        totalCrypto: 12,
+        totalStocks: 8,
+        activeAlerts: alerts ? JSON.parse(alerts).filter((a: any) => a.active).length : 0,
+        totalValue: 125000,
+        favorites: favorites ? JSON.parse(favorites).length : 0,
+        historyCount: history ? JSON.parse(history).length : 0,
+      });
     }
   };
 
@@ -47,6 +82,7 @@ export default function DashboardPage() {
       icon: DollarSign,
       color: "text-electric-blue",
       bgColor: "bg-electric-blue/10",
+      link: "/crypto",
     },
     {
       title: "Actions",
@@ -54,20 +90,39 @@ export default function DashboardPage() {
       icon: Activity,
       color: "text-accent-purple",
       bgColor: "bg-accent-purple/10",
+      link: "/stocks",
+    },
+    {
+      title: "Favoris",
+      value: stats.favorites,
+      icon: Star,
+      color: "text-yellow-500",
+      bgColor: "bg-yellow-500/10",
+      link: "/favorites",
     },
     {
       title: "Alertes Actives",
       value: stats.activeAlerts,
-      icon: TrendingUp,
+      icon: Bell,
       color: "text-accent-cyan",
       bgColor: "bg-accent-cyan/10",
+      link: "/alerts",
+    },
+    {
+      title: "Historique",
+      value: stats.historyCount,
+      icon: Clock,
+      color: "text-accent-purple",
+      bgColor: "bg-accent-purple/10",
+      link: "/history",
     },
     {
       title: "Valeur Totale",
       value: `$${stats.totalValue.toLocaleString()}`,
-      icon: DollarSign,
+      icon: Zap,
       color: "text-electric-blue",
       bgColor: "bg-electric-blue/10",
+      link: null,
     },
   ];
 
@@ -83,17 +138,16 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {statCards.map((stat, index) => {
           const Icon = stat.icon;
-          return (
+          const CardContent = (
             <motion.div
-              key={index}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
               whileHover={{ y: -5 }}
-              className="glass rounded-xl p-6 card-hover"
+              className="glass rounded-xl p-6 card-hover h-full"
             >
               <div className="flex items-center justify-between mb-4">
                 <div className={`${stat.bgColor} p-3 rounded-lg`}>
@@ -103,6 +157,14 @@ export default function DashboardPage() {
               <h3 className="text-gray-400 text-sm mb-1">{stat.title}</h3>
               <p className="text-2xl font-bold text-white">{stat.value}</p>
             </motion.div>
+          );
+
+          return stat.link ? (
+            <Link key={index} href={stat.link}>
+              {CardContent}
+            </Link>
+          ) : (
+            <div key={index}>{CardContent}</div>
           );
         })}
       </div>

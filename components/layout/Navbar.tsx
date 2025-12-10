@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Home, TrendingUp, Bell, Brain, Settings, Info } from "lucide-react";
+import { Menu, X, Home, TrendingUp, Bell, Brain, Settings, Info, Star, Clock, GitCompare, User, LogIn } from "lucide-react";
 import Image from "next/image";
 
 const navItems = [
@@ -12,8 +12,12 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: TrendingUp },
   { href: "/crypto", label: "Crypto", icon: TrendingUp },
   { href: "/stocks", label: "Actions", icon: TrendingUp },
+  { href: "/favorites", label: "Favoris", icon: Star },
+  { href: "/compare", label: "Comparer", icon: GitCompare },
   { href: "/alerts", label: "Alertes", icon: Bell },
+  { href: "/history", label: "Historique", icon: Clock },
   { href: "/assistant", label: "Assistant IA", icon: Brain },
+  { href: "/profile", label: "Profil", icon: User },
   { href: "/settings", label: "Paramètres", icon: Settings },
   { href: "/about", label: "À propos", icon: Info },
 ];

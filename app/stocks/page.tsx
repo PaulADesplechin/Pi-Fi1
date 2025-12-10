@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Search, TrendingUp, TrendingDown, ExternalLink } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, ExternalLink, Heart } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 interface Stock {
@@ -25,6 +25,15 @@ export default function StocksPage() {
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
+  const [favorites, setFavorites] = useState<string[]>([]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("favorites");
+    if (saved) {
+      const favs = JSON.parse(saved);
+      setFavorites(favs.map((f: any) => f.symbol));
+    }
+  }, []);
 
   useEffect(() => {
     fetchStocks();

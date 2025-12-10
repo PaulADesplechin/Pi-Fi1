@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Bell, Moon, Sun, Globe, Shield, User } from "lucide-react";
+import { Bell, Moon, Sun, Globe, Shield, User, Palette } from "lucide-react";
+import { useTheme } from "@/hooks/useTheme";
 
 export default function SettingsPage() {
   const [notifications, setNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(true);
+  const { theme, toggleTheme } = useTheme();
   const [language, setLanguage] = useState("fr");
 
   const requestNotificationPermission = async () => {
