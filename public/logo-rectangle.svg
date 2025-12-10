@@ -1,78 +1,40 @@
-<svg width="200" height="80" viewBox="0 0 200 80" xmlns="http://www.w3.org/2000/svg">
+<svg width="200" height="60" viewBox="0 0 200 60" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <!-- Gradient pour le fond -->
-    <linearGradient id="rectBgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#0a0e27;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#0f1629;stop-opacity:1" />
-    </linearGradient>
-    
-    <!-- Gradient pour les éléments -->
-    <linearGradient id="rectElementGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+    <!-- Gradient pour le texte -->
+    <linearGradient id="textGradient" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" style="stop-color:#00ffff;stop-opacity:1" />
       <stop offset="50%" style="stop-color:#00d4ff;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#0099cc;stop-opacity:1" />
     </linearGradient>
     
-    <!-- Gradient pour le texte -->
-    <linearGradient id="textGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#00d4ff;stop-opacity:1" />
-      <stop offset="50%" style="stop-color:#00ffff;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#00d4ff;stop-opacity:1" />
-    </linearGradient>
-    
     <!-- Filtre de lueur -->
-    <filter id="rectGlow">
-      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+    <filter id="textGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
+      <feOffset in="blur" dx="0" dy="0" result="offsetBlur"/>
+      <feFlood flood-color="#00d4ff" flood-opacity="0.6"/>
+      <feComposite in2="offsetBlur" operator="in"/>
       <feMerge>
-        <feMergeNode in="coloredBlur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-    
-    <!-- Filtre de lueur forte -->
-    <filter id="rectStrongGlow">
-      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-      <feMerge>
-        <feMergeNode in="coloredBlur"/>
+        <feMergeNode/>
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
   </defs>
   
-  <!-- Fond -->
-  <rect width="200" height="80" rx="12" fill="url(#rectBgGradient)"/>
-  
-  <!-- Cercle avec design abstrait à gauche -->
-  <g transform="translate(50, 40)">
-    <!-- Cercles concentriques -->
-    <circle cx="0" cy="0" r="28" fill="none" stroke="url(#rectElementGradient)" stroke-width="1.5" opacity="0.3" filter="url(#rectGlow)"/>
-    <circle cx="0" cy="0" r="24" fill="none" stroke="url(#rectElementGradient)" stroke-width="2" opacity="0.5" filter="url(#rectGlow)"/>
-    
-    <!-- Design abstrait -->
-    <g filter="url(#rectStrongGlow)">
-      <circle cx="0" cy="-10" r="10" fill="url(#rectElementGradient)"/>
-      <circle cx="0" cy="10" r="10" fill="url(#rectElementGradient)"/>
-      <rect x="-10" y="-5" width="20" height="10" rx="5" fill="url(#rectElementGradient)"/>
-      <line x1="-18" y1="0" x2="-10" y2="0" stroke="url(#rectElementGradient)" stroke-width="2.5" stroke-linecap="round"/>
-      <line x1="10" y1="0" x2="18" y2="0" stroke="url(#rectElementGradient)" stroke-width="2.5" stroke-linecap="round"/>
-    </g>
-    
-    <!-- Points décoratifs -->
-    <circle cx="0" cy="-24" r="2" fill="#00d4ff" opacity="0.7" filter="url(#rectGlow)"/>
-    <circle cx="17" cy="-12" r="2" fill="#00ffff" opacity="0.7" filter="url(#rectGlow)"/>
-    <circle cx="24" cy="0" r="2" fill="#00d4ff" opacity="0.7" filter="url(#rectGlow)"/>
-    <circle cx="17" cy="12" r="2" fill="#00ffff" opacity="0.7" filter="url(#rectGlow)"/>
-    <circle cx="0" cy="24" r="2" fill="#00d4ff" opacity="0.7" filter="url(#rectGlow)"/>
-    <circle cx="-17" cy="12" r="2" fill="#00ffff" opacity="0.7" filter="url(#rectGlow)"/>
-    <circle cx="-24" cy="0" r="2" fill="#00d4ff" opacity="0.7" filter="url(#rectGlow)"/>
-    <circle cx="-17" cy="-12" r="2" fill="#00ffff" opacity="0.7" filter="url(#rectGlow)"/>
-  </g>
+  <!-- Fond transparent -->
+  <rect width="200" height="60" rx="8" fill="transparent"/>
   
   <!-- Texte "Pifi" -->
-  <text x="100" y="50" font-family="Arial, sans-serif" font-size="36" font-weight="bold" fill="url(#textGradient)" filter="url(#rectGlow)">
+  <text
+    x="100"
+    y="40"
+    font-family="Arial, sans-serif"
+    font-size="42"
+    font-weight="bold"
+    text-anchor="middle"
+    fill="url(#textGradient)"
+    filter="url(#textGlow)"
+    style="letter-spacing: -1px;"
+  >
     Pifi
   </text>
-  
-  <!-- Ligne décorative sous le texte -->
-  <line x1="100" y1="58" x2="190" y2="58" stroke="url(#rectElementGradient)" stroke-width="2" opacity="0.6" filter="url(#rectGlow)"/>
 </svg>

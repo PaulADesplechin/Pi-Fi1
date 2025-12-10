@@ -48,15 +48,23 @@ export default function AssistantPage() {
 
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+      const token = localStorage.getItem("token");
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      
       const response = await fetch(`${apiUrl}/api/assistant/chat`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
+        headers,
         body: JSON.stringify({
-          message: input,
-          history: messages.slice(-5), // Derniers 5 messages pour contexte
+          message: userMessage.content,
+          history: messages.slice(-5).map(m => ({
+            role: m.role,
+            content: m.content,
+          })),
         }),
       });
 

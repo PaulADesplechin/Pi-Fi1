@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Search, TrendingUp, TrendingDown, ExternalLink, Heart } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface CryptoAsset {
   id: string;
@@ -23,10 +24,10 @@ const tradingPlatforms = {
 };
 
 export default function CryptoPage() {
+  const router = useRouter();
   const [cryptos, setCryptos] = useState<CryptoAsset[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
-  const [selectedCrypto, setSelectedCrypto] = useState<CryptoAsset | null>(null);
   const [favorites, setFavorites] = useState<string[]>([]);
 
   useEffect(() => {
@@ -138,7 +139,7 @@ export default function CryptoPage() {
                 transition={{ delay: index * 0.05 }}
                 whileHover={{ y: -5 }}
                 className="glass rounded-xl p-6 card-hover cursor-pointer"
-                onClick={() => setSelectedCrypto(crypto)}
+                onClick={() => router.push(`/crypto/${crypto.id}`)}
               >
                 <div className="flex items-center justify-between mb-4">
                   <div>
@@ -232,33 +233,6 @@ export default function CryptoPage() {
         </div>
       )}
 
-      {/* Modal pour détails */}
-      {selectedCrypto && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={() => setSelectedCrypto(null)}
-        >
-          <motion.div
-            initial={{ scale: 0.9 }}
-            animate={{ scale: 1 }}
-            onClick={(e) => e.stopPropagation()}
-            className="glass-strong rounded-xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-          >
-            <h2 className="text-3xl font-bold mb-4 gradient-text">
-              {selectedCrypto.name}
-            </h2>
-            {/* Détails complets ici */}
-            <button
-              onClick={() => setSelectedCrypto(null)}
-              className="btn-secondary mt-4"
-            >
-              Fermer
-            </button>
-          </motion.div>
-        </motion.div>
-      )}
     </div>
   );
 }

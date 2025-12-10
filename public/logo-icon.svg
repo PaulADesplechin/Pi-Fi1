@@ -4,42 +4,25 @@
       <stop offset="0%" style="stop-color:#00ffff;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#00d4ff;stop-opacity:1" />
     </linearGradient>
-    
     <filter id="iconGlow">
-      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
       <feMerge>
         <feMergeNode in="coloredBlur"/>
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
   </defs>
-  
-  <!-- Cercle de fond -->
-  <circle cx="32" cy="32" r="30" fill="#0a0e27" stroke="url(#iconGradient)" stroke-width="2" filter="url(#iconGlow)"/>
-  
-  <!-- Cercles concentriques -->
-  <circle cx="32" cy="32" r="24" fill="none" stroke="#00d4ff" stroke-width="1" opacity="0.4" filter="url(#iconGlow)"/>
-  <circle cx="32" cy="32" r="18" fill="none" stroke="url(#iconGradient)" stroke-width="2" opacity="0.7" filter="url(#iconGlow)"/>
-  
-  <!-- Design abstrait simplifié -->
-  <g transform="translate(32, 32)" filter="url(#iconGlow)">
-    <!-- Forme centrale -->
-    <circle cx="0" cy="-6" r="8" fill="url(#iconGradient)"/>
-    <circle cx="0" cy="6" r="8" fill="url(#iconGradient)"/>
-    <rect x="-8" y="-3" width="16" height="6" rx="3" fill="url(#iconGradient)"/>
-    
-    <!-- Lignes -->
-    <line x1="-12" y1="0" x2="-8" y2="0" stroke="url(#iconGradient)" stroke-width="2" stroke-linecap="round"/>
-    <line x1="8" y1="0" x2="12" y2="0" stroke="url(#iconGradient)" stroke-width="2" stroke-linecap="round"/>
-  </g>
-  
-  <!-- Points décoratifs -->
-  <circle cx="32" cy="12" r="2" fill="#00d4ff" opacity="0.7" filter="url(#iconGlow)"/>
-  <circle cx="45" cy="20" r="2" fill="#00ffff" opacity="0.7" filter="url(#iconGlow)"/>
-  <circle cx="52" cy="32" r="2" fill="#00d4ff" opacity="0.7" filter="url(#iconGlow)"/>
-  <circle cx="45" cy="44" r="2" fill="#00ffff" opacity="0.7" filter="url(#iconGlow)"/>
-  <circle cx="32" cy="52" r="2" fill="#00d4ff" opacity="0.7" filter="url(#iconGlow)"/>
-  <circle cx="19" cy="44" r="2" fill="#00ffff" opacity="0.7" filter="url(#iconGlow)"/>
-  <circle cx="12" cy="32" r="2" fill="#00d4ff" opacity="0.7" filter="url(#iconGlow)"/>
-  <circle cx="19" cy="20" r="2" fill="#00ffff" opacity="0.7" filter="url(#iconGlow)"/>
+  <rect width="64" height="64" rx="12" fill="url(#iconGradient)" opacity="0.2"/>
+  <text
+    x="32"
+    y="42"
+    font-family="Arial, sans-serif"
+    font-size="28"
+    font-weight="bold"
+    text-anchor="middle"
+    fill="url(#iconGradient)"
+    filter="url(#iconGlow)"
+  >
+    Pifi
+  </text>
 </svg>
