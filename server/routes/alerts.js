@@ -1,20 +1,38 @@
 const express = require("express");
 const router = express.Router();
-const { authenticateToken } = require("../middleware/auth");
 const alertService = require("../services/alertService");
 
-// Obtenir toutes les alertes de l'utilisateur
-router.get("/", authenticateToken, (req, res) => {
-  const userId = req.user.id;
+// Middleware pour obtenir l'utilisateur (avec fallback démo)
+function getUser(req) {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  
+  if (token) {
+    try {
+      const jwt = require("jsonwebtoken");
+      const user = jwt.verify(token, process.env.JWT_SECRET || "secret");
+      return user;
+    } catch (error) {
+      return { id: "demo-user", email: "demo@pifi.app" };
+    }
+  }
+  
+  return { id: "demo-user", email: "demo@pifi.app" };
+}
+
+// Obtenir toutes les alertes de l'utilisateur (public avec fallback)
+router.get("/", (req, res) => {
+  const user = getUser(req);
   const allAlerts = alertService.getAllAlerts();
-  const userAlerts = allAlerts.filter((alert) => alert.userId === userId);
+  const userAlerts = allAlerts.filter((alert) => alert.userId === user.id);
   res.json(userAlerts);
 });
 
-// Créer une nouvelle alerte
-router.post("/", authenticateToken, async (req, res) => {
+// Créer une nouvelle alerte (public avec fallback)
+router.post("/", async (req, res) => {
   try {
-    const userId = req.user.id;
+    const user = getUser(req);
+    const userId = user.id;
     const { assetType, symbol, threshold, direction } = req.body;
 
     // Valider les données
@@ -50,9 +68,10 @@ router.post("/", authenticateToken, async (req, res) => {
   }
 });
 
-// Modifier une alerte
-router.patch("/:id", authenticateToken, (req, res) => {
-  const userId = req.user.id;
+// Modifier une alerte (public avec fallback)
+router.patch("/:id", (req, res) => {
+  const user = getUser(req);
+  const userId = user.id;
   const { id } = req.params;
   const updates = req.body;
 
@@ -72,9 +91,10 @@ router.patch("/:id", authenticateToken, (req, res) => {
   res.json(updatedAlert);
 });
 
-// Supprimer une alerte
-router.delete("/:id", authenticateToken, (req, res) => {
-  const userId = req.user.id;
+// Supprimer une alerte (public avec fallback)
+router.delete("/:id", (req, res) => {
+  const user = getUser(req);
+  const userId = user.id;
   const { id } = req.params;
 
   const allAlerts = alertService.getAllAlerts();

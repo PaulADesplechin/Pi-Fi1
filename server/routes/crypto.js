@@ -66,7 +66,10 @@ router.get("/:symbol", async (req, res) => {
       current_price: coin.market_data.current_price.usd,
       price_change_24h: coin.market_data.price_change_24h,
       price_change_percentage_24h: coin.market_data.price_change_percentage_24h,
+      price_change_percentage_7d: coin.market_data.price_change_percentage_7d_in_currency?.usd || 0,
+      price_change_percentage_30d: coin.market_data.price_change_percentage_30d_in_currency?.usd || 0,
       market_cap: coin.market_data.market_cap.usd,
+      total_volume: coin.market_data.total_volume.usd,
       high_24h: coin.market_data.high_24h.usd,
       low_24h: coin.market_data.low_24h.usd,
     });

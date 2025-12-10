@@ -1,9 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const { authenticateToken } = require("../middleware/auth");
 
-// Obtenir les statistiques du dashboard
-router.get("/", authenticateToken, async (req, res) => {
+// Obtenir les statistiques du dashboard (public)
+router.get("/", async (req, res) => {
   try {
     // Récupérer les stats depuis la base de données
     // Pour la démo, on retourne des données mockées
