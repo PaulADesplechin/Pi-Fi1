@@ -25,6 +25,11 @@ export default function FavoritesPage() {
   }, []);
 
   const loadFavorites = () => {
+    if (typeof window === "undefined") {
+      setLoading(false);
+      return;
+    }
+    
     // Charger depuis localStorage
     const saved = localStorage.getItem("favorites");
     if (saved) {
@@ -82,6 +87,8 @@ export default function FavoritesPage() {
   };
 
   const removeFavorite = (id: string) => {
+    if (typeof window === "undefined") return;
+    
     const updated = favorites.filter((f) => f.id !== id);
     setFavorites(updated);
     localStorage.setItem("favorites", JSON.stringify(updated));

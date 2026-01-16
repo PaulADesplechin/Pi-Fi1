@@ -46,13 +46,15 @@ export default function AlertsPage() {
   };
 
   const createAlert = async () => {
+    if (typeof window === "undefined") return;
+    
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
       const response = await fetch(`${apiUrl}/api/alerts`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
         },
         body: JSON.stringify(newAlert),
       });
@@ -73,12 +75,14 @@ export default function AlertsPage() {
   };
 
   const deleteAlert = async (id: string) => {
+    if (typeof window === "undefined") return;
+    
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
       const response = await fetch(`${apiUrl}/api/alerts/${id}`, {
         method: "DELETE",
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
         },
       });
 
@@ -91,13 +95,15 @@ export default function AlertsPage() {
   };
 
   const toggleAlert = async (id: string, active: boolean) => {
+    if (typeof window === "undefined") return;
+    
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
       const response = await fetch(`${apiUrl}/api/alerts/${id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
         },
         body: JSON.stringify({ active: !active }),
       });

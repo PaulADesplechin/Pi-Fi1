@@ -3,6 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/layout/Navbar";
 import { Providers } from "@/components/providers/Providers";
+import BackgroundDecorations from "@/components/ui/BackgroundDecorations";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -42,14 +44,17 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/logo-icon.svg" />
       </head>
       <body className={inter.className}>
-        <Providers>
-          <div className="min-h-screen bg-dark-bg">
-            <Navbar />
-            <main className="pt-20">
-              {children}
-            </main>
-          </div>
-        </Providers>
+        <ErrorBoundary>
+          <Providers>
+            <div className="min-h-screen bg-dark-bg relative">
+              <BackgroundDecorations />
+              <Navbar />
+              <main className="pt-20 relative z-10">
+                {children}
+              </main>
+            </div>
+          </Providers>
+        </ErrorBoundary>
       </body>
     </html>
   );

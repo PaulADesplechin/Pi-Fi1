@@ -6,8 +6,15 @@ import { TrendingUp, TrendingDown, DollarSign, Activity, Star, Clock, Bell, Zap 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import Link from "next/link";
 
+import type { Stats } from "@/types";
+
+interface ChartDataPoint {
+  time: string;
+  value: number;
+}
+
 export default function DashboardPage() {
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<Stats>({
     totalCrypto: 0,
     totalStocks: 0,
     activeAlerts: 0,
@@ -16,7 +23,7 @@ export default function DashboardPage() {
     historyCount: 0,
   });
 
-  const [chartData, setChartData] = useState<any[]>([]);
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
 
   useEffect(() => {
     // Simuler des données (remplacer par appel API réel)
@@ -37,15 +44,46 @@ export default function DashboardPage() {
       if (response.ok) {
         const data = await response.json();
         // Ajouter les stats locales
-        const favorites = localStorage.getItem("favorites");
-        const history = localStorage.getItem("alertHistory");
-        setStats({
-          ...data,
-          favorites: favorites ? JSON.parse(favorites).length : 0,
-          historyCount: history ? JSON.parse(history).length : 0,
-        });
+        if (typeof window !== "undefined") {
+          const favorites = localStorage.getItem("favorites");
+          const history = localStorage.getItem("alertHistory");
+          setStats({
+            ...data,
+            favorites: favorites ? JSON.parse(favorites).length : 0,
+            historyCount: history ? JSON.parse(history).length : 0,
+          });
+        } else {
+          setStats(data);
+        }
       } else {
         // Stats locales si API indisponible
+        if (typeof window !== "undefined") {
+          const favorites = localStorage.getItem("favorites");
+          const history = localStorage.getItem("alertHistory");
+          const alerts = localStorage.getItem("alerts");
+          setStats({
+            totalCrypto: 12,
+            totalStocks: 8,
+            activeAlerts: alerts ? JSON.parse(alerts).filter((a: any) => a.active).length : 0,
+            totalValue: 125000,
+            favorites: favorites ? JSON.parse(favorites).length : 0,
+            historyCount: history ? JSON.parse(history).length : 0,
+          });
+        } else {
+          setStats({
+            totalCrypto: 12,
+            totalStocks: 8,
+            activeAlerts: 0,
+            totalValue: 125000,
+            favorites: 0,
+            historyCount: 0,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement des stats:", error);
+      // Stats locales en fallback
+      if (typeof window !== "undefined") {
         const favorites = localStorage.getItem("favorites");
         const history = localStorage.getItem("alertHistory");
         const alerts = localStorage.getItem("alerts");
@@ -57,21 +95,16 @@ export default function DashboardPage() {
           favorites: favorites ? JSON.parse(favorites).length : 0,
           historyCount: history ? JSON.parse(history).length : 0,
         });
+      } else {
+        setStats({
+          totalCrypto: 12,
+          totalStocks: 8,
+          activeAlerts: 0,
+          totalValue: 125000,
+          favorites: 0,
+          historyCount: 0,
+        });
       }
-    } catch (error) {
-      console.error("Erreur lors du chargement des stats:", error);
-      // Stats locales en fallback
-      const favorites = localStorage.getItem("favorites");
-      const history = localStorage.getItem("alertHistory");
-      const alerts = localStorage.getItem("alerts");
-      setStats({
-        totalCrypto: 12,
-        totalStocks: 8,
-        activeAlerts: alerts ? JSON.parse(alerts).filter((a: any) => a.active).length : 0,
-        totalValue: 125000,
-        favorites: favorites ? JSON.parse(favorites).length : 0,
-        historyCount: history ? JSON.parse(history).length : 0,
-      });
     }
   };
 

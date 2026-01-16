@@ -9,6 +9,7 @@ export default function SettingsPage() {
   const [notifications, setNotifications] = useState(true);
   const { theme, toggleTheme } = useTheme();
   const [language, setLanguage] = useState("fr");
+  const darkMode = theme === "dark";
 
   const requestNotificationPermission = async () => {
     if ("Notification" in window) {
@@ -89,7 +90,7 @@ export default function SettingsPage() {
               <p className="text-gray-400 text-sm">Mode sombre activé</p>
             </div>
             <button
-              onClick={() => setDarkMode(!darkMode)}
+              onClick={toggleTheme}
               className={`w-12 h-6 rounded-full transition-all ${
                 darkMode ? "bg-electric-blue" : "bg-gray-600"
               }`}

@@ -8,6 +8,8 @@ export function useTheme() {
   const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    
     const saved = localStorage.getItem("theme") as Theme;
     if (saved) {
       setTheme(saved);
@@ -18,6 +20,8 @@ export function useTheme() {
   }, []);
 
   const applyTheme = (newTheme: Theme) => {
+    if (typeof document === "undefined") return;
+    
     const root = document.documentElement;
     if (newTheme === "light") {
       root.classList.remove("dark");
@@ -29,6 +33,8 @@ export function useTheme() {
   };
 
   const toggleTheme = () => {
+    if (typeof window === "undefined") return;
+    
     const newTheme = theme === "dark" ? "light" : "dark";
     setTheme(newTheme);
     localStorage.setItem("theme", newTheme);

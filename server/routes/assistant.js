@@ -28,7 +28,7 @@ async function getCryptoData(symbol) {
 router.post("/chat", async (req, res) => {
   try {
     // Vérifier le token si présent, sinon continuer en mode démo
-    const token = req.headers.authorization?.replace("Bearer ", "");
+    const token = req.headers.authorization ? req.headers.authorization.replace("Bearer ", "") : "";
     
     const { message, history } = req.body;
 
@@ -72,21 +72,24 @@ router.post("/chat", async (req, res) => {
 
     if (openai && cryptoMentions.length > 0) {
       // Utiliser OpenAI avec contexte crypto
-      const systemPrompt = `Tu es un assistant financier expert spécialisé dans les cryptomonnaies. Tu fournis des analyses et des informations éducatives, mais tu ne donnes jamais de conseils d'investissement spécifiques. Tu expliques les tendances, les mouvements de prix, et les concepts financiers de manière claire et accessible.
-
-${cryptoData ? `Données actuelles du marché:
-${JSON.stringify(cryptoData, null, 2)}` : ""}
-
-Règles importantes:
-- Ne jamais dire "achetez" ou "vendez" directement
-- Utiliser "vous pourriez considérer" ou "certains investisseurs"
-- Toujours mentionner les risques
-- Fournir des analyses basées sur les données
-- Être transparent sur les limitations`;
+      let systemPrompt = "Tu es un assistant financier expert spécialisé dans les cryptomonnaies. Tu fournis des analyses et des informations éducatives, mais tu ne donnes jamais de conseils d'investissement spécifiques. Tu expliques les tendances, les mouvements de prix, et les concepts financiers de manière claire et accessible.\n\n";
+      
+      if (cryptoData) {
+        systemPrompt += "Données actuelles du marché:\n";
+        systemPrompt += JSON.stringify(cryptoData, null, 2);
+        systemPrompt += "\n\n";
+      }
+      
+      systemPrompt += "Règles importantes:\n";
+      systemPrompt += "- Ne jamais dire \"achetez\" ou \"vendez\" directement\n";
+      systemPrompt += "- Utiliser \"vous pourriez considérer\" ou \"certains investisseurs\"\n";
+      systemPrompt += "- Toujours mentionner les risques\n";
+      systemPrompt += "- Fournir des analyses basées sur les données\n";
+      systemPrompt += "- Être transparent sur les limitations";
 
       const messages = [
         { role: "system", content: systemPrompt },
-        ...history.map((msg) => ({
+        ...(history || []).map((msg) => ({
           role: msg.role === "user" ? "user" : "assistant",
           content: msg.content,
         })),
@@ -118,7 +121,7 @@ function generateIntelligentResponse(userInput, cryptoData, cryptoMentions) {
 
   // Réponses pour recommandations crypto
   if (lowerInput.includes("recommandation") || lowerInput.includes("meilleur") || lowerInput.includes("choix")) {
-    if (cryptoData?.topCryptos) {
+    if (cryptoData && cryptoData.topCryptos) {
       const top5 = cryptoData.topCryptos;
       let response = "Voici les 5 principales cryptomonnaies par capitalisation actuelle :\n\n";
       top5.forEach((crypto, index) => {
@@ -139,7 +142,12 @@ function generateIntelligentResponse(userInput, cryptoData, cryptoMentions) {
   if (lowerInput.includes("bitcoin") || lowerInput.includes("btc")) {
     if (cryptoData) {
       const data = cryptoData.market_data;
-      return `**Bitcoin (BTC)** - Analyse actuelle :\n\n💰 Prix actuel : $${data.current_price.usd.toLocaleString()}\n📊 Variation 24h : ${data.price_change_percentage_24h >= 0 ? "+" : ""}${data.price_change_percentage_24h.toFixed(2)}%\n📈 Plus haut 24h : $${data.high_24h.usd.toLocaleString()}\n📉 Plus bas 24h : $${data.low_24h.usd.toLocaleString()}\n\n💡 Bitcoin reste la cryptomonnaie dominante avec la plus grande capitalisation. C'est souvent considéré comme une réserve de valeur numérique. Cependant, la volatilité reste élevée.`;
+      const price = data.current_price.usd.toLocaleString();
+      const change24h = data.price_change_percentage_24h >= 0 ? "+" : "";
+      const change24hValue = data.price_change_percentage_24h.toFixed(2);
+      const high24h = data.high_24h.usd.toLocaleString();
+      const low24h = data.low_24h.usd.toLocaleString();
+      return "**Bitcoin (BTC)** - Analyse actuelle :\n\n💰 Prix actuel : $" + price + "\n📊 Variation 24h : " + change24h + change24hValue + "%\n📈 Plus haut 24h : $" + high24h + "\n📉 Plus bas 24h : $" + low24h + "\n\n💡 Bitcoin reste la cryptomonnaie dominante avec la plus grande capitalisation. C'est souvent considéré comme une réserve de valeur numérique. Cependant, la volatilité reste élevée.";
     }
     return "Bitcoin (BTC) est la première cryptomonnaie créée en 2009. C'est une monnaie décentralisée qui utilise la technologie blockchain. Le prix de Bitcoin peut être très volatil et est influencé par de nombreux facteurs comme l'adoption institutionnelle, la régulation, et les événements macroéconomiques.";
   }
@@ -148,7 +156,12 @@ function generateIntelligentResponse(userInput, cryptoData, cryptoMentions) {
   if (lowerInput.includes("ethereum") || lowerInput.includes("eth")) {
     if (cryptoData) {
       const data = cryptoData.market_data;
-      return `**Ethereum (ETH)** - Analyse actuelle :\n\n💰 Prix actuel : $${data.current_price.usd.toLocaleString()}\n📊 Variation 24h : ${data.price_change_percentage_24h >= 0 ? "+" : ""}${data.price_change_percentage_24h.toFixed(2)}%\n📈 Plus haut 24h : $${data.high_24h.usd.toLocaleString()}\n📉 Plus bas 24h : $${data.low_24h.usd.toLocaleString()}\n\n💡 Ethereum est une plateforme blockchain programmable qui permet de créer des applications décentralisées (dApps) et des smart contracts. C'est la deuxième plus grande cryptomonnaie par capitalisation.";
+      const price = data.current_price.usd.toLocaleString();
+      const change24h = data.price_change_percentage_24h >= 0 ? "+" : "";
+      const change24hValue = data.price_change_percentage_24h.toFixed(2);
+      const high24h = data.high_24h.usd.toLocaleString();
+      const low24h = data.low_24h.usd.toLocaleString();
+      return "**Ethereum (ETH)** - Analyse actuelle :\n\n💰 Prix actuel : $" + price + "\n📊 Variation 24h : " + change24h + change24hValue + "%\n📈 Plus haut 24h : $" + high24h + "\n📉 Plus bas 24h : $" + low24h + "\n\n💡 Ethereum est une plateforme blockchain programmable qui permet de créer des applications décentralisées (dApps) et des smart contracts. C'est la deuxième plus grande cryptomonnaie par capitalisation.";
     }
     return "Ethereum (ETH) est une plateforme blockchain qui permet de créer des applications décentralisées (dApps) et des smart contracts. Contrairement à Bitcoin qui est principalement une monnaie, Ethereum est une plateforme programmable.";
   }

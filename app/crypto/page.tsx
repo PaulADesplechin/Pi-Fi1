@@ -150,6 +150,8 @@ export default function CryptoPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (typeof window === "undefined") return;
+                        
                         const saved = localStorage.getItem("favorites") || "[]";
                         const favs = JSON.parse(saved);
                         const isFavorite = favorites.includes(crypto.symbol);

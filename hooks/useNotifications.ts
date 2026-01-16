@@ -4,15 +4,18 @@ import { useEffect, useState } from "react";
 
 export function useNotifications() {
   const [permission, setPermission] = useState<NotificationPermission>("default");
+  const [isSupported, setIsSupported] = useState(false);
 
   useEffect(() => {
-    if ("Notification" in window) {
+    // Vérifier si on est côté client
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setIsSupported(true);
       setPermission(Notification.permission);
     }
   }, []);
 
   const requestPermission = async () => {
-    if ("Notification" in window) {
+    if (typeof window !== "undefined" && "Notification" in window) {
       const perm = await Notification.requestPermission();
       setPermission(perm);
       return perm === "granted";
@@ -21,7 +24,11 @@ export function useNotifications() {
   };
 
   const showNotification = (title: string, options?: NotificationOptions) => {
-    if ("Notification" in window && Notification.permission === "granted") {
+    if (
+      typeof window !== "undefined" &&
+      "Notification" in window &&
+      Notification.permission === "granted"
+    ) {
       new Notification(title, {
         icon: "/logo-icon.svg",
         badge: "/logo-icon.svg",
@@ -34,7 +41,7 @@ export function useNotifications() {
     permission,
     requestPermission,
     showNotification,
-    isSupported: "Notification" in window,
+    isSupported,
   };
 }
 

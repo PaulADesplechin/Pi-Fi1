@@ -47,6 +47,8 @@ export default function AssistantPage() {
     setIsLoading(true);
 
     try {
+      if (typeof window === "undefined") return;
+      
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
       const token = localStorage.getItem("token");
       const headers: HeadersInit = {

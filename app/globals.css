@@ -31,6 +31,12 @@ html {
 
 body {
   background: var(--dark-bg);
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(0, 212, 255, 0.1) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.1) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.1) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(0, 212, 255, 0.1) 0px, transparent 50%);
+  background-size: 100% 100%;
   color: #ffffff;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
@@ -39,6 +45,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
   transition: background-color 0.3s ease, color 0.3s ease;
+  position: relative;
 }
 
 /* Light theme */
@@ -240,4 +247,68 @@ body {
 
 .input-field::placeholder {
   color: rgba(255, 255, 255, 0.5);
+}
+
+/* Logo animé avec effet techno */
+.logo-animated {
+  animation: logoPulse 3s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.6));
+  transition: all 0.3s ease;
+}
+
+.logo-animated:hover {
+  filter: drop-shadow(0 0 15px rgba(0, 212, 255, 0.9));
+  transform: scale(1.05);
+}
+
+@keyframes logoPulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.6));
+  }
+  50% {
+    filter: drop-shadow(0 0 15px rgba(0, 255, 255, 0.9)) drop-shadow(0 0 25px rgba(0, 212, 255, 0.5));
+  }
+}
+
+/* Effet de rotation subtile pour le logo */
+@keyframes logoRotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.logo-container {
+  position: relative;
+  display: inline-block;
+}
+
+.logo-container::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 50%;
+  background: linear-gradient(45deg, #00d4ff, #00ffff, #0099cc, #00d4ff);
+  background-size: 400% 400%;
+  opacity: 0.3;
+  z-index: -1;
+  animation: gradientRotate 4s ease infinite;
+  filter: blur(8px);
+}
+
+@keyframes gradientRotate {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
 }

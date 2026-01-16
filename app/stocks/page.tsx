@@ -28,6 +28,8 @@ export default function StocksPage() {
   const [favorites, setFavorites] = useState<string[]>([]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    
     const saved = localStorage.getItem("favorites");
     if (saved) {
       const favs = JSON.parse(saved);
@@ -157,6 +159,8 @@ export default function StocksPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (typeof window === "undefined") return;
+                        
                         const saved = localStorage.getItem("favorites") || "[]";
                         const favs = JSON.parse(saved);
                         const isFavorite = favorites.includes(stock.symbol);

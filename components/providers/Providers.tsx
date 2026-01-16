@@ -2,12 +2,13 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useNotifications } from "@/hooks/useNotifications";
+import type { User, Alert } from "@/types";
 
 interface AppContextType {
   isConnected: boolean;
-  user: any;
-  alerts: any[];
-  setAlerts: (alerts: any[]) => void;
+  user: User | null;
+  alerts: Alert[];
+  setAlerts: (alerts: Alert[]) => void;
   notifications: ReturnType<typeof useNotifications>;
 }
 
@@ -15,11 +16,14 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function Providers({ children }: { children: ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
-  const [user, setUser] = useState(null);
-  const [alerts, setAlerts] = useState<any[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
   const notifications = useNotifications();
 
   useEffect(() => {
+    // Vérifier si on est côté client
+    if (typeof window === "undefined") return;
+
     // Demander la permission de notification au démarrage
     if (notifications.isSupported && notifications.permission === "default") {
       notifications.requestPermission();
@@ -42,9 +46,12 @@ export function Providers({ children }: { children: ReactNode }) {
           if (response.ok) {
             const userData = await response.json();
             setUser(userData);
+          } else {
+            console.warn("Erreur récupération utilisateur:", response.status);
           }
         } catch (error) {
           console.error("Erreur récupération utilisateur:", error);
+          // Ne pas bloquer l'application si le backend n'est pas disponible
         }
       };
       fetchUser();
@@ -58,15 +65,21 @@ export function Providers({ children }: { children: ReactNode }) {
         const { io } = await import("socket.io-client");
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
         socket = io(apiUrl, {
-          transports: ["websocket"],
+          transports: ["websocket", "polling"],
+          reconnection: true,
+          reconnectionDelay: 1000,
+          reconnectionAttempts: 5,
+          timeout: 20000,
         });
 
         socket.on("connect", () => {
           setIsConnected(true);
           console.log("Connecté au serveur WebSocket");
-          const currentToken = localStorage.getItem("token");
-          const userId = currentToken ? JSON.parse(atob(currentToken.split(".")[1])).id : "demo-user";
-          socket.emit("subscribe-alerts", userId);
+          if (typeof window !== "undefined") {
+            const currentToken = localStorage.getItem("token");
+            const userId = currentToken ? JSON.parse(atob(currentToken.split(".")[1])).id : "demo-user";
+            socket.emit("subscribe-alerts", userId);
+          }
         });
 
         socket.on("disconnect", () => {
@@ -74,23 +87,25 @@ export function Providers({ children }: { children: ReactNode }) {
           console.log("Déconnecté du serveur WebSocket");
         });
 
-        socket.on("alert", (alert: any) => {
+        socket.on("alert", (alert: Alert) => {
           setAlerts((prev) => [alert, ...prev]);
           
-          // Sauvegarder dans l'historique
-          const history = localStorage.getItem("alertHistory") || "[]";
-          const histArray = JSON.parse(history);
-          histArray.unshift({
-            id: alert.id,
-            symbol: alert.symbol,
-            name: alert.name,
-            type: alert.type,
-            change: parseFloat(alert.change),
-            threshold: alert.threshold,
-            timestamp: alert.timestamp,
-            assetType: alert.assetType,
-          });
-          localStorage.setItem("alertHistory", JSON.stringify(histArray.slice(0, 100))); // Garder les 100 dernières
+          // Sauvegarder dans l'historique (uniquement côté client)
+          if (typeof window !== "undefined") {
+            const history = localStorage.getItem("alertHistory") || "[]";
+            const histArray = JSON.parse(history);
+            histArray.unshift({
+              id: alert.id,
+              symbol: alert.symbol,
+              name: alert.name,
+              type: alert.type,
+              change: parseFloat(alert.change),
+              threshold: alert.threshold,
+              timestamp: alert.timestamp,
+              assetType: alert.assetType,
+            });
+            localStorage.setItem("alertHistory", JSON.stringify(histArray.slice(0, 100))); // Garder les 100 dernières
+          }
           
           // Notification browser
           notifications.showNotification(`Alerte ${alert.type === "up" ? "📈 Hausse" : "📉 Baisse"}`, {

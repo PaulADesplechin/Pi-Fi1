@@ -7,13 +7,18 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale/fr";
 
+import type { User } from "@/types";
+
 export default function ProfilePage() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [email, setEmail] = useState("");
+  const [stats, setStats] = useState({ favorites: 0, history: 0, alerts: 0 });
   const router = useRouter();
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    
     const userStr = localStorage.getItem("user");
     const token = localStorage.getItem("token");
     
@@ -24,9 +29,21 @@ export default function ProfilePage() {
     } else if (!token) {
       router.push("/login");
     }
+    
+    // Charger les statistiques
+    const favorites = localStorage.getItem("favorites");
+    const history = localStorage.getItem("alertHistory");
+    const alerts = localStorage.getItem("alerts");
+    setStats({
+      favorites: favorites ? JSON.parse(favorites).length : 0,
+      history: history ? JSON.parse(history).length : 0,
+      alerts: alerts ? JSON.parse(alerts).filter((a: any) => a.active).length : 0,
+    });
   }, [router]);
 
   const handleSave = async () => {
+    if (typeof window === "undefined") return;
+    
     // Sauvegarder les modifications
     const updatedUser = { ...user, email };
     localStorage.setItem("user", JSON.stringify(updatedUser));
@@ -35,6 +52,8 @@ export default function ProfilePage() {
   };
 
   const handleLogout = () => {
+    if (typeof window === "undefined") return;
+    
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     router.push("/login");
@@ -170,25 +189,19 @@ export default function ProfilePage() {
       >
         <div className="glass rounded-xl p-6 text-center">
           <p className="text-3xl font-bold text-electric-blue mb-2">
-            {localStorage.getItem("favorites")
-              ? JSON.parse(localStorage.getItem("favorites")!).length
-              : 0}
+            {stats.favorites}
           </p>
           <p className="text-gray-400">Favoris</p>
         </div>
         <div className="glass rounded-xl p-6 text-center">
           <p className="text-3xl font-bold text-accent-purple mb-2">
-            {localStorage.getItem("alertHistory")
-              ? JSON.parse(localStorage.getItem("alertHistory")!).length
-              : 0}
+            {stats.history}
           </p>
           <p className="text-gray-400">Alertes reçues</p>
         </div>
         <div className="glass rounded-xl p-6 text-center">
           <p className="text-3xl font-bold text-accent-cyan mb-2">
-            {localStorage.getItem("alerts")
-              ? JSON.parse(localStorage.getItem("alerts")!).filter((a: any) => a.active).length
-              : 0}
+            {stats.alerts}
           </p>
           <p className="text-gray-400">Alertes actives</p>
         </div>

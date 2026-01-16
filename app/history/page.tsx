@@ -27,10 +27,12 @@ export default function HistoryPage() {
   }, []);
 
   const loadHistory = () => {
-    const saved = localStorage.getItem("alertHistory");
-    if (saved) {
-      const hist = JSON.parse(saved);
-      setHistory(hist);
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("alertHistory");
+      if (saved) {
+        const hist = JSON.parse(saved);
+        setHistory(hist);
+      }
     }
   };
 
@@ -45,6 +47,8 @@ export default function HistoryPage() {
     });
 
   const exportToCSV = () => {
+    if (typeof window === "undefined") return;
+    
     const headers = ["Date", "Symbole", "Nom", "Type", "Variation (%)", "Seuil (%)"];
     const rows = filteredHistory.map((item) => [
       format(new Date(item.timestamp), "dd/MM/yyyy HH:mm", { locale: fr }),
@@ -61,7 +65,10 @@ export default function HistoryPage() {
     const a = document.createElement("a");
     a.href = url;
     a.download = `pifi-alertes-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
   };
 
   return (

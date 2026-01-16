@@ -32,10 +32,12 @@ export default function CryptoDetailsPage() {
   const [favorites, setFavorites] = useState<string[]>([]);
 
   useEffect(() => {
-    const saved = localStorage.getItem("favorites");
-    if (saved) {
-      const favs = JSON.parse(saved);
-      setFavorites(favs.map((f: any) => f.symbol));
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("favorites");
+      if (saved) {
+        const favs = JSON.parse(saved);
+        setFavorites(favs.map((f: any) => f.symbol));
+      }
     }
     fetchCryptoDetails();
   }, [cryptoId]);
@@ -113,7 +115,8 @@ export default function CryptoDetailsPage() {
   };
 
   const toggleFavorite = () => {
-    if (!crypto) return;
+    if (!crypto || typeof window === "undefined") return;
+    
     const saved = localStorage.getItem("favorites") || "[]";
     const favs = JSON.parse(saved);
     const isFavorite = favorites.includes(crypto.symbol);

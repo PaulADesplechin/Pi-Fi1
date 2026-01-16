@@ -8,6 +8,16 @@ const nextConfig = {
   images: {
     domains: ['assets.coingecko.com', 'logo.clearbit.com'],
     unoptimized: false,
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'assets.coingecko.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'logo.clearbit.com',
+      },
+    ],
   },
   // Headers pour sécurité
   async headers() {
@@ -31,13 +41,22 @@ const nextConfig = {
       },
     ];
   },
-  // Désactiver les warnings pour le build (temporairement)
+  // Configuration TypeScript et ESLint
   typescript: {
-    ignoreBuildErrors: true,
+    // Ne pas ignorer les erreurs, mais permettre le build avec warnings
+    ignoreBuildErrors: false,
   },
   eslint: {
-    ignoreDuringBuilds: true,
+    // Ne pas ignorer ESLint, mais permettre le build avec warnings
+    ignoreDuringBuilds: false,
   },
+  // Optimisations de build
+  compress: true,
+  poweredByHeader: false,
+  // Configuration pour le build de production
+  productionBrowserSourceMaps: false,
+  // Optimisation des images
+  optimizeFonts: true,
 };
 
 module.exports = nextConfig;

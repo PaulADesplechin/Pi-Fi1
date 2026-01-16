@@ -10,9 +10,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:analyze": "ANALYZE=true next build",
     "start": "next start",
     "lint": "next lint",
-    "server": "node server/index.js"
+    "lint:fix": "next lint --fix",
+    "type-check": "tsc --noEmit",
+    "server": "node server/index.js",
+    "clean": "rm -rf .next out node_modules/.cache"
   },
   "dependencies": {
     "next": "^15.0.0",

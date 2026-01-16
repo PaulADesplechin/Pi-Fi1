@@ -32,13 +32,15 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3">
-            <Image
-              src="/logo-circle.svg"
-              alt="Pifi"
-              width={40}
-              height={40}
-              className="w-10 h-10"
-            />
+            <div className="logo-container">
+              <Image
+                src="/logo-circle.svg"
+                alt="Pifi"
+                width={40}
+                height={40}
+                className="w-10 h-10 logo-animated"
+              />
+            </div>
             <span className="text-xl font-bold gradient-text hidden sm:block">
               Pifi
             </span>

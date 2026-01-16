@@ -15,9 +15,25 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || process.env.SERVER_PORT || 3001;
 
-// Middleware
-app.use(cors());
+// Middleware CORS amélioré
+app.use(cors({
+  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
+
+// Middleware pour parser JSON
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Middleware pour logger les requêtes (dev seulement)
+if (process.env.NODE_ENV !== "production") {
+  app.use((req, res, next) => {
+    console.log(`${req.method} ${req.path}`);
+    next();
+  });
+}
 
 // Routes
 app.use("/api/crypto", require("./routes/crypto"));
