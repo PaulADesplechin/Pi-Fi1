@@ -1,0 +1,17 @@
+# Netlify Redirects pour π-FI Dashboard
+# IMPORTANT: Ce fichier doit être dans public/ pour être pris en compte
+
+# Fichiers statiques (depuis la racine)
+/static/*  /static/:splat  200
+
+# API vers fonction serverless
+/api/*  /.netlify/functions/server/api/:splat  200
+
+# Routes Flask
+/logo  /.netlify/functions/server/logo  200
+/dashboard  /.netlify/functions/server/dashboard  200
+/health  /.netlify/functions/server/health  200
+
+# Toutes les autres routes vers index.html
+/*  /index.html  200
+

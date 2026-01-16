@@ -1,0 +1,51 @@
+============================================================
+   COMMENT VOIR LES CHANGEMENTS (Logo + Couleurs)
+============================================================
+
+⚠️ IMPORTANT: Le navigateur cache les fichiers CSS et images!
+
+📋 ÉTAPES OBLIGATOIRES:
+
+1. ARRÊTEZ le serveur (Ctrl+C dans la fenêtre)
+
+2. REDÉMARREZ le serveur:
+   - Double-cliquez sur DEMARRER.bat
+
+3. DANS LE NAVIGATEUR:
+   
+   Option A - FORCER LE RECHARGEMENT:
+   - Appuyez sur Ctrl + F5 (Windows/Linux)
+   - Ou Ctrl + Shift + R (Mac)
+   
+   Option B - VIDER LE CACHE:
+   - Chrome/Edge: Ctrl + Shift + Delete
+   - Firefox: Ctrl + Shift + Delete
+   - Cochez "Images et fichiers en cache"
+   - Cliquez sur "Effacer les données"
+   
+   Option C - MODE NAVIGATION PRIVÉE:
+   - Chrome/Edge: Ctrl + Shift + N
+   - Firefox: Ctrl + Shift + P
+   - Ouvrez: http://localhost:5000
+
+4. VÉRIFIER LE LOGO:
+   - Le logo devrait apparaître en haut de la page
+   - Si pas visible, ouvrez la console (F12) et regardez les erreurs
+   - Testez directement: http://localhost:5000/logo
+
+5. VÉRIFIER LES COULEURS:
+   - Background: Noir bleu profond (#020915)
+   - Cartes: Bleu nuit (#06101C)
+   - Boutons: Bleu néon (#00AFFF)
+   - Texte: Blanc froid (#F5F9FF)
+
+============================================================
+
+💡 Si ça ne marche toujours pas:
+   1. Fermez COMPLÈTEMENT le navigateur
+   2. Rouvrez-le
+   3. Allez sur http://localhost:5000
+   4. Faites Ctrl + F5
+
+============================================================
+

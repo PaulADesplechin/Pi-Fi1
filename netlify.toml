@@ -1,0 +1,45 @@
+# Configuration Netlify pour π-FI Dashboard
+# Site: https://pietfi1.netlify.app
+
+[build]
+  # Build command pour installer les dépendances Python
+  command = "python -m pip install --upgrade pip && pip install -r requirements.txt && pip install -r netlify/functions/server/requirements.txt"
+  # Répertoire de publication
+  publish = "public"
+  
+# IMPORTANT: index.html doit être dans le dossier public/
+
+[build.environment]
+  PYTHON_VERSION = "3.11"
+  NODE_VERSION = "18"
+
+# Les redirections sont gérées par le fichier _redirects (priorité)
+# Ce fichier netlify.toml configure uniquement le build et les headers
+
+# Headers de sécurité
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+
+# Cache pour les assets statiques
+[[headers]]
+  for = "/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Headers pour les fichiers de données
+[[headers]]
+  for = "/*.json"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+
+# Configuration des fonctions serverless
+[functions]
+  directory = "netlify/functions"
+  # Python functions - pas besoin de bundler Node.js
+

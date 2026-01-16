@@ -1,0 +1,42 @@
+/**
+ * π-FI Brand Colors
+ * Palette colorimétrique officielle
+ */
+
+:root {
+  /* Couleurs principales */
+  --color-white-cold: #F5F9FF;
+  --color-neon-blue: #00AFFF;
+  --color-night-blue: #06101C;
+  --color-deep-blue-black: #020915;
+  --color-tech-gray: #5A6C81;
+  
+  /* Couleurs secondaires */
+  --color-scientific-green: #4FFFA3;
+  --color-steel-blue: #13344F;
+  --color-arctic-blue: #A1E3FF;
+  
+  /* Dégradés */
+  --gradient-main: linear-gradient(90deg, #00AFFF 0%, #4FFFA3 100%);
+  
+  /* Usage sémantique */
+  --bg-primary: var(--color-night-blue);
+  --bg-secondary: var(--color-deep-blue-black);
+  --text-primary: var(--color-white-cold);
+  --text-secondary: var(--color-tech-gray);
+  --accent-primary: var(--color-neon-blue);
+  --accent-secondary: var(--color-scientific-green);
+  --border-color: var(--color-arctic-blue);
+  --ui-bg: var(--color-steel-blue);
+}
+
+/* Classes utilitaires */
+.bg-primary { background-color: var(--bg-primary); }
+.bg-secondary { background-color: var(--bg-secondary); }
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.accent-primary { color: var(--accent-primary); }
+.accent-secondary { color: var(--accent-secondary); }
+.border-brand { border-color: var(--border-color); }
+.gradient-main { background: var(--gradient-main); }
+

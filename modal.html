@@ -1,0 +1,42 @@
+<!-- Modal Trading Crypto - Style Binance/OKX -->
+<div id="tradingModal" class="trading-modal">
+    <div class="trading-modal-content">
+        <div class="trading-modal-header">
+            <div class="modal-header-left">
+                <img src="/static/pi-fi-logo.png?v=4" alt="π-FI Logo" class="modal-logo" />
+                <div class="modal-title-group">
+                    <h2><span class="trading-live-indicator"></span><span id="modal-symbol">BTC</span> - <span id="modal-name">Bitcoin</span></h2>
+                </div>
+            </div>
+            <button class="close-modal" onclick="closeTradingModal()" aria-label="Fermer">&times;</button>
+        </div>
+        
+        <div class="trading-stats" id="trading-stats">
+            <div class="trading-stat-card">
+                <div class="trading-stat-label">Prix Actuel</div>
+                <div class="trading-stat-value" id="stat-price">$0.00</div>
+            </div>
+            <div class="trading-stat-card">
+                <div class="trading-stat-label">24h Change</div>
+                <div class="trading-stat-value" id="stat-change">+0.00%</div>
+            </div>
+            <div class="trading-stat-card">
+                <div class="trading-stat-label">24h High</div>
+                <div class="trading-stat-value" id="stat-high">$0.00</div>
+            </div>
+            <div class="trading-stat-card">
+                <div class="trading-stat-label">24h Low</div>
+                <div class="trading-stat-value" id="stat-low">$0.00</div>
+            </div>
+            <div class="trading-stat-card">
+                <div class="trading-stat-label">Volume 24h</div>
+                <div class="trading-stat-value" id="stat-volume">$0</div>
+            </div>
+        </div>
+        
+        <div class="trading-chart-container">
+            <canvas id="tradingChart"></canvas>
+        </div>
+    </div>
+</div>
+
